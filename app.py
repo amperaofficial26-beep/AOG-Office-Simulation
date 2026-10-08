@@ -12,15 +12,24 @@ import streamlit as st
 
 from office import apps as apps_mod
 from office import engine, github as gh
-from office.config import APP_NAME, APP_TAGLINE, PROVIDERS, PROVIDER_ORDER, VERSION, get_key, has_key, load_config, update_config
-from office.icons import icon_svg, labeled
+from office.config import (
+    APP_NAME,
+    APP_TAGLINE,
+    PROVIDERS,
+    PROVIDER_ORDER,
+    VERSION,
+    get_key,
+    has_key,
+    read_secrets_file,
+    write_secrets_file,
+)
+from office.icons import icon_svg, labeled, mat
 from office.llm import provider_health, test_key
 from office.models import (
     MODELS,
     RETIRED,
     VERIFIED_AT,
     live_models,
-    migrate_model,
     models_for,
     probe_all,
 )
@@ -34,7 +43,7 @@ from office.models_data import (
     TASK_WORKING,
 )
 from office.roster import ROSTER, ROOMS, ROOM_ORDER, suggested_employee
-from office.state import export_snapshot, load_state, reset_state, save_state
+from office.state import export_snapshot, load_config, load_state, reset_state, save_state, update_config
 from office.ui.characters import state_label
 from office.ui.office_view import render_office, room_legend
 from office.ui.theme import bar, base_css, chip, progress_row, section, stat_block, theme as get_theme
@@ -66,7 +75,7 @@ def persist() -> None:
 
 
 def toast(text: str, icon_name: str = "info") -> None:
-    st.toast(text, icon=None)
+    st.toast(text, icon=mat(icon_name))
     st.session_state.setdefault("flash", []).append((icon_name, text))
 
 
@@ -97,6 +106,22 @@ def emp_options(state: dict[str, Any]) -> tuple[list[str], list[str]]:
         room = ROOMS.get(emp.get("room", ""), None)
         labels.append(f"{emp.get('name')} — {emp.get('role_label')} · {room.name if room else '-'}")
     return ids, labels
+
+
+def eid_from_label(ids: list[str], labels: list[str], pick: str | None, fallback_index: int = 0) -> str:
+    """Ubah pilihan selectbox menjadi id karyawan.
+
+    Selalu mengembalikan id yang valid: bila widget mengembalikan None (mis. saat
+    diuji otomatis) dipakai karyawan terpilih di session_state, lalu indeks fallback.
+    """
+    if pick in labels:
+        return ids[labels.index(pick)]
+    dipilih = st.session_state.get("selected_emp")
+    if dipilih in ids:
+        return dipilih
+    if ids:
+        return ids[min(max(fallback_index, 0), len(ids) - 1)]
+    return ""
 
 
 # ----------------------------------------------------------------------------- kantor
@@ -132,10 +157,11 @@ def room_buttons() -> None:
             and (state.get("employees", {}).get(t.get("assignee", ""), {}) or {}).get("room") == rid
         )
         with cols[i % 5]:
-            label = f"{room.name}" + (f"  ({unread})" if unread else "")
+            label = room.name + (f" ({unread})" if unread else "")
             if st.button(
                 label,
                 key=f"room_{rid}",
+                icon=mat(room.icon),
                 use_container_width=True,
                 type="primary" if st.session_state.get("selected_room") == rid else "secondary",
             ):
@@ -157,7 +183,7 @@ def room_detail() -> None:
         f'<div>{labeled(room.icon, f"<b>{room.name}</b>", 20)}'
         f'<div class="small" style="margin-top:4px">{room.desc}</div></div>'
         f'<div class="row">{chip(f"{len(people)} karyawan", "", "badge")}{chip(f"{len(tasks)} tugas aktif", "", "assignment")}'
-        f'{chip(f"{room.gw}x{room.gh} petak", "muted", "grid_on" if "grid_on" in "" else "widgets")}</div></div></div>',
+        f'{chip(f"{room.gw}x{room.gh} petak", "muted", "widgets")}</div></div></div>',
         unsafe_allow_html=True,
     )
     if people:
@@ -224,13 +250,13 @@ def panel_tugas() -> None:
             repos = g.get("repos", [])
             repo_pick = st.selectbox("Repo", repos or ["-"], index=0)
             files_pick = st.text_input("File yang perlu dibaca (pisahkan dengan koma)", placeholder="app.py, utils.py")
-        submitted = st.form_submit_button("Kirim tugas", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Kirim tugas", type="primary", icon=mat("send"), use_container_width=True)
 
     if submitted:
         if not title or not brief:
             st.warning("Judul dan brief wajib diisi.")
             return
-        eid = ids[labels.index(chosen)]
+        eid = eid_from_label(ids, labels, chosen, emp_idx)
         room_map = {ROOMS[r].name: r for r in ROOM_ORDER}
         room_id = room_map.get(room_choice, "")
         context = ""
@@ -273,7 +299,7 @@ def panel_tugas() -> None:
             f'{bar(task.get("progress", 0) * 100)}</div>',
             unsafe_allow_html=True,
         )
-    if st.button("Jalankan semua antrean sekarang", type="primary", icon=None):
+    if st.button("Jalankan semua antrean sekarang", type="primary", icon=mat("play_arrow")):
         for task in queue:
             with st.spinner(f"{emp_name(state, task['assignee'])} mengerjakan: {task['title']}"):
                 engine.run_task(state, task["tid"])
@@ -286,11 +312,11 @@ def panel_inbox() -> None:
     state = S()
     ids, labels = emp_options(state)
     top = st.columns([1, 1, 3])
-    if top[0].button("Simulasi pesan masuk", use_container_width=True):
+    if top[0].button("Simulasi pesan masuk", icon=mat("mark_chat_unread"), use_container_width=True):
         engine.simulate_incoming(state)
         persist()
         st.rerun()
-    if top[1].button("Tandai semua dibaca", use_container_width=True):
+    if top[1].button("Tandai semua dibaca", icon=mat("mark_email_read"), use_container_width=True):
         for msg in state.get("inbox", []):
             msg["read"] = True
         persist()
@@ -301,7 +327,7 @@ def panel_inbox() -> None:
         channel = pc[1].selectbox("Kanal", ["email", "chat", "telepon", "form web"])
         subject = pc[2].text_input("Subjek", "")
         body = st.text_area("Isi pesan", height=70)
-        if st.form_submit_button("Kirim ke ruang penerima pesan", use_container_width=True):
+        if st.form_submit_button("Kirim ke ruang penerima pesan", icon=mat("send"), use_container_width=True):
             engine.push_inbox(state, sender or "Anonim", subject or "(tanpa subjek)", body, channel)
             persist()
             st.rerun()
@@ -322,7 +348,7 @@ def panel_inbox() -> None:
                 unsafe_allow_html=True,
             )
             b1, b2, b3 = st.columns([1, 2, 1])
-            if b1.button("Tandai dibaca", key=f"read_{msg['mid']}", use_container_width=True):
+            if b1.button("Tandai dibaca", key=f"read_{msg['mid']}", icon=mat("check"), use_container_width=True):
                 engine.mark_read(state, msg["mid"])
                 persist()
                 st.rerun()
@@ -332,8 +358,8 @@ def panel_inbox() -> None:
                 key=f"deleg_{msg['mid']}",
                 label_visibility="collapsed",
             )
-            if b3.button("Jadikan tugas", key=f"task_{msg['mid']}", use_container_width=True, type="primary"):
-                eid = ids[labels.index(pick)]
+            if b3.button("Jadikan tugas", key=f"task_{msg['mid']}", icon=mat("assignment"), use_container_width=True, type="primary"):
+                eid = eid_from_label(ids, labels, pick)
                 engine.delegate_message(state, msg["mid"], eid)
                 persist()
                 toast("Pesan diubah menjadi tugas", "assignment")
@@ -362,12 +388,12 @@ def task_card(state: dict[str, Any], task: dict[str, Any], approve_key: str) -> 
     if task.get("result"):
         st.markdown(f'<div class="task-result">{task["result"]}</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 1, 2])
-    if c1.button("Setujui", key=f"ok_{approve_key}", type="primary", use_container_width=True):
+    if c1.button("Setujui", key=f"ok_{approve_key}", type="primary", icon=mat("task_alt"), use_container_width=True):
         engine.approve_task(state, task["tid"], st.session_state.get(f"note_{approve_key}", ""), 5)
         persist()
         toast("Tugas disetujui", "task_alt")
         st.rerun()
-    if c2.button("Tolak / revisi", key=f"no_{approve_key}", use_container_width=True):
+    if c2.button("Tolak / revisi", key=f"no_{approve_key}", icon=mat("edit"), use_container_width=True):
         note = st.session_state.get(f"note_{approve_key}", "")
         engine.reject_task(state, task["tid"], note, rerun=True)
         persist()
@@ -410,9 +436,15 @@ def panel_karyawan() -> None:
     state = S()
     st.markdown(section("Tim Anda", "diversity_3", "Setiap karyawan memakai model AI sendiri. Anda bisa mengganti modelnya kapan saja."), unsafe_allow_html=True)
     ids, labels = emp_options(state)
-    pick = st.selectbox("Pilih karyawan", labels, key="emp_pick")
-    eid = ids[labels.index(pick)]
+    default_index = 0
+    if st.session_state.get("selected_emp") in ids:
+        default_index = ids.index(st.session_state["selected_emp"])
+    pick = st.selectbox("Pilih karyawan", labels, index=default_index, key="emp_pick")
+    eid = eid_from_label(ids, labels, pick)
     st.session_state.selected_emp = eid
+    if not eid:
+        st.warning("Roster belum termuat. Muat ulang halaman atau reset kantor dari panel Pengaturan.")
+        return
     emp = state["employees"][eid]
     st.markdown(
         f'<div class="card accent"><div class="row between"><div>'
@@ -431,19 +463,19 @@ def panel_karyawan() -> None:
     st.markdown(f'<div class="small">Kebiasaan: {", ".join(emp.get("quirks", []))}</div>', unsafe_allow_html=True)
 
     b = st.columns(4)
-    if b[0].button("Istirahatkan", use_container_width=True):
+    if b[0].button("Istirahatkan", icon=mat("local_cafe"), use_container_width=True):
         engine.send_to_break(state, eid)
         persist()
         st.rerun()
-    if b[1].button("Panggil ke meja", use_container_width=True):
+    if b[1].button("Panggil ke meja", icon=mat("directions_run"), use_container_width=True):
         engine.recall_employee(state, eid)
         persist()
         st.rerun()
-    if b[2].button("Sapa", use_container_width=True):
+    if b[2].button("Sapa", icon=mat("waving_hand"), use_container_width=True):
         engine.push_inbox(state, cfg().get("boss_name", "Bos"), f"Halo {emp['name']}", "Semangat kerja hari ini ya.", "chat")
         persist()
         st.rerun()
-    if b[3].button("Tugaskan cepat", type="primary", use_container_width=True):
+    if b[3].button("Tugaskan cepat", type="primary", icon=mat("assignment"), use_container_width=True):
         st.session_state.selected_emp = eid
         st.session_state.page = "Beri Tugas"
         st.rerun()
@@ -466,7 +498,7 @@ def panel_karyawan() -> None:
         format_func=lambda m: f"{catalogue[m]['label']} — {catalogue[m]['cost']}",
         key=f"model_{eid}",
     )
-    if st.button("Terapkan model", type="primary"):
+    if st.button("Terapkan model", type="primary", icon=mat("save")):
         emp["model"] = chosen
         emp["provider"] = provider
         persist()
@@ -482,7 +514,7 @@ def panel_karyawan() -> None:
         st.markdown(f'<div class="card soft"><b>{who}</b><div class="small">{row["text"]}</div></div>', unsafe_allow_html=True)
     with st.form(f"chat_{eid}"):
         text = st.text_input("Katakan sesuatu", placeholder="mis. Bagaimana progres ruang kode hari ini?")
-        if st.form_submit_button("Kirim", type="primary"):
+        if st.form_submit_button("Kirim", type="primary", icon=mat("send")):
             if text:
                 with st.spinner(f"{emp['name']} mengetik..."):
                     engine.chat_with_employee(state, eid, text)
@@ -495,13 +527,26 @@ def panel_github() -> None:
     g = cfg().get("github", {})
     st.markdown(section("Integrasi GitHub", "github", "Repo Anda dibaca langsung dari API GitHub. Token hanya dipakai di sisi server."), unsafe_allow_html=True)
     if not get_key("github"):
-        st.warning("GITHUB_TOKEN belum diisi. Isi di `.streamlit/secrets.toml` agar repo terbaca otomatis.")
+        st.warning("GITHUB_TOKEN belum diisi. Isi lewat form 'Isi kunci langsung di sini' di panel Pengaturan, atau sunting `.streamlit/secrets.toml`.")
+    else:
+        try:
+            me = gh.whoami()
+            st.markdown(
+                f'<div class="card ok"><div class="row between">'
+                f'{labeled("github", f"<b>Terhubung sebagai {me['login'] or '?'}</b>", 18)}'
+                f'<div class="row">{chip(f"{me['public_repos']} repo publik", "", "folder", 13)}'
+                f'{chip(me["plan"] or "akun gratis", "muted", "badge", 13)}</div></div>'
+                f'<div class="tiny" style="margin-top:4px">Token aktif — repo, commit, isu, dan PR dibaca live.</div></div>',
+                unsafe_allow_html=True,
+            )
+        except gh.GitHubError as exc:
+            st.error(f"Token terisi tapi GitHub menolak: {exc}")
     with st.form("gh_cfg"):
         c = st.columns(3)
         owner = c[0].text_input("Owner / username", g.get("owner", ""))
         branch = c[1].text_input("Branch default", g.get("branch", "main"))
         repos_txt = c[2].text_input("Repo (pisahkan koma)", ", ".join(g.get("repos", [])))
-        if st.form_submit_button("Simpan konfigurasi", type="primary"):
+        if st.form_submit_button("Simpan konfigurasi", type="primary", icon=mat("save")):
             update_config(
                 github={
                     "owner": owner.strip(),
@@ -512,7 +557,7 @@ def panel_github() -> None:
             st.rerun()
 
     t1, t2 = st.columns(2)
-    if t1.button("Sinkronkan semua repo", use_container_width=True):
+    if t1.button("Sinkronkan semua repo", icon=mat("sync"), use_container_width=True):
         with st.spinner("Membaca repo dari GitHub..."):
             try:
                 rows = gh.list_repos(owner, limit=100)
@@ -521,7 +566,7 @@ def panel_github() -> None:
             except Exception as exc:
                 st.error(f"Gagal: {exc}")
         st.rerun()
-    if t2.button("Cek rate limit", use_container_width=True):
+    if t2.button("Cek rate limit", icon=mat("speed"), use_container_width=True):
         try:
             rl = gh.rate_limit()
             st.info(f"Sisa {rl['remaining']} dari {rl['limit']} permintaan per jam.")
@@ -574,12 +619,13 @@ def panel_apps() -> None:
     if rows:
         for i, row in enumerate(rows):
             c = st.columns([2, 3, 1.6, 1])
-            c[0].text_input("Nama", row.get("name", ""), key=f"app_name_{i}", label_visibility="collapsed")
-            c[1].text_input("URL", row.get("url", ""), key=f"app_url_{i}", label_visibility="collapsed")
-            c[2].text_input("Repo terkait", row.get("repo", ""), key=f"app_repo_{i}", label_visibility="collapsed")
-            c[3].button("Hapus", key=f"app_del_{i}", use_container_width=True)
-            if st.session_state.get(f"app_del_{i}"):
-                pass
+            c[0].text_input("Nama aplikasi", row.get("name", ""), key=f"app_name_{i}", label_visibility="collapsed", placeholder="Nama aplikasi")
+            c[1].text_input("URL deploy", row.get("url", ""), key=f"app_url_{i}", label_visibility="collapsed", placeholder="https://nama-app.streamlit.app")
+            c[2].text_input("Repo terkait", row.get("repo", ""), key=f"app_repo_{i}", label_visibility="collapsed", placeholder="nama repo")
+            if c[3].button("Hapus", key=f"app_del_{i}", icon=mat("close"), use_container_width=True):
+                rows = apps_mod.remove_app(i)
+                toast("Aplikasi dihapus", "close")
+                st.rerun()
             tone = "ok" if row.get("status") == "hidup" else ("bad" if row.get("status") not in ("belum dicek", "") else "muted")
             st.markdown(
                 f'<div class="row">{chip(row.get("status", "belum dicek"), tone, "language", 13)}'
@@ -592,16 +638,16 @@ def panel_apps() -> None:
         name = c[0].text_input("Nama aplikasi")
         url = c[1].text_input("URL deploy")
         repo = c[2].text_input("Repo terkait")
-        if st.form_submit_button("Tambah aplikasi", type="primary"):
+        if st.form_submit_button("Tambah aplikasi", type="primary", icon=mat("add")):
             if name or url:
                 apps_mod.add_app(name, url, repo)
                 st.rerun()
     b1, b2 = st.columns(2)
-    if b1.button("Cek status semua", use_container_width=True, type="primary"):
+    if b1.button("Cek status semua", use_container_width=True, type="primary", icon=mat("monitor_heart")):
         with st.spinner("Memeriksa setiap aplikasi..."):
             rows = apps_mod.check_all()
         st.rerun()
-    if b2.button("Simpan perubahan", use_container_width=True):
+    if b2.button("Simpan perubahan", use_container_width=True, icon=mat("save")):
         updated = []
         for i, row in enumerate(rows):
             updated.append(
@@ -616,11 +662,12 @@ def panel_apps() -> None:
         toast("Daftar aplikasi disimpan", "save")
         st.rerun()
     s = apps_mod.summary(rows)
-    c = st.columns(4)
+    c = st.columns(5)
     c[0].markdown(stat_block("apps", s["total"], "Total app"), unsafe_allow_html=True)
     c[1].markdown(stat_block("verified", s["hidup"], "Hidup", "ok"), unsafe_allow_html=True)
     c[2].markdown(stat_block("error", s["mati"], "Bermasalah", "bad"), unsafe_allow_html=True)
-    c[3].markdown(stat_block("schedule", s["belum_dicek"], "Belum dicek"), unsafe_allow_html=True)
+    c[3].markdown(stat_block("link", s["tanpa_url"], "Tanpa URL", "warn"), unsafe_allow_html=True)
+    c[4].markdown(stat_block("schedule", s["belum_dicek"], "Belum dicek"), unsafe_allow_html=True)
 
 
 # ----------------------------------------------------------------------------- model & provider
@@ -646,7 +693,7 @@ def panel_models() -> None:
                 f'<div class="tiny" style="margin-top:6px">Batas gratis: {meta["free_tier"]}</div></div>',
                 unsafe_allow_html=True,
             )
-    if st.button("Probe katalog live sekarang", type="primary", icon=None):
+    if st.button("Probe katalog live sekarang", type="primary", icon=mat("sync")):
         with st.spinner("Memeriksa katalog tiap provider..."):
             results = probe_all(use_cache=False)
         for provider, res in results.items():
@@ -663,7 +710,7 @@ def panel_models() -> None:
     st.markdown(section("Uji panggilan nyata", "bolt", "Kirim satu permintaan kecil untuk memastikan kunci + model benar-benar jalan."), unsafe_allow_html=True)
     test_provider = st.selectbox("Provider", PROVIDER_ORDER, key="test_provider")
     test_model = st.selectbox("Model", list(models_for(test_provider)), key="test_model")
-    if st.button("Uji sekarang", type="primary"):
+    if st.button("Uji sekarang", type="primary", icon=mat("bolt")):
         with st.spinner("Menghubungi model..."):
             result = test_key(test_provider, test_model)
         if result["ok"]:
@@ -708,9 +755,31 @@ def panel_settings() -> None:
         c2 = st.columns(2)
         theme_name = c2[0].selectbox("Tema", ["night", "day"], index=0 if configuration.get("theme") == "night" else 1)
         auto = c2[1].checkbox("Auto-refresh panggung", value=configuration.get("auto_refresh", True))
-        if st.form_submit_button("Simpan", type="primary"):
+        if st.form_submit_button("Simpan", type="primary", icon=mat("save")):
             update_config(boss_name=boss, company=company, theme=theme_name, auto_refresh=auto)
             toast("Pengaturan disimpan", "save")
+            st.rerun()
+
+    st.markdown(section("Isi kunci langsung di sini", "key", "Tersimpan ke .streamlit/secrets.toml di server ini. Kolom bertopeng, nilai lama tidak ditampilkan."), unsafe_allow_html=True)
+    with st.form("form_secrets", clear_on_submit=True):
+        sc = st.columns(2)
+        g = sc[0].text_input("GROQ_API_KEY", type="password", placeholder="gsk_...")
+        o = sc[0].text_input("OPENROUTER_API_KEY", type="password", placeholder="sk-or-v1-...")
+        a = sc[1].text_input("AION_API_KEY", type="password", placeholder="aion_...")
+        t = sc[1].text_input("GITHUB_TOKEN", type="password", placeholder="github_pat_...")
+        if st.form_submit_button("Simpan kunci", type="primary", icon=mat("save")):
+            written = write_secrets_file(
+                {
+                    "GROQ_API_KEY": g,
+                    "OPENROUTER_API_KEY": o,
+                    "AION_API_KEY": a,
+                    "GITHUB_TOKEN": t,
+                }
+            )
+            if written:
+                toast(f"Kunci disimpan: {', '.join(written)}", "key")
+            else:
+                st.info("Tidak ada kunci baru yang diisi.")
             st.rerun()
 
     st.markdown(section("Status kunci API", "key"), unsafe_allow_html=True)
@@ -734,13 +803,13 @@ def panel_settings() -> None:
 
     st.markdown(section("Data & cadangan", "storage"), unsafe_allow_html=True)
     c = st.columns(3)
-    if c[0].button("Ekspor snapshot", use_container_width=True):
+    if c[0].button("Ekspor snapshot", icon=mat("download"), use_container_width=True):
         path = export_snapshot()
         toast(f"Snapshot disimpan di {path}", "download")
-    if c[1].button("Muat ulang state dari disk", use_container_width=True):
+    if c[1].button("Muat ulang state dari disk", icon=mat("refresh"), use_container_width=True):
         st.session_state.office_state = load_state()
         st.rerun()
-    if c[2].button("Reset kantor", use_container_width=True, type="primary"):
+    if c[2].button("Reset kantor", use_container_width=True, type="primary", icon=mat("restart_alt")):
         st.session_state.office_state = reset_state()
         toast("Kantor direset", "refresh")
         st.rerun()
@@ -782,7 +851,7 @@ def sidebar() -> None:
         if st.button(
             f"{page}{badge}",
             key=f"nav_{page}",
-            icon=icon_name,
+            icon=mat(icon_name),
             use_container_width=True,
             type="primary" if st.session_state.page == page else "secondary",
         ):
@@ -793,7 +862,7 @@ def sidebar() -> None:
     for row in state.get("log", [])[:10]:
         st.markdown(
             f'<div class="tiny" style="margin-bottom:6px">'
-            f'{labeled("chevron_right" if "chevron_right" in "" else "play_arrow", row["text"], 12)}</div>',
+            f'{labeled("play_arrow", row["text"], 12)}</div>',
             unsafe_allow_html=True,
         )
 
