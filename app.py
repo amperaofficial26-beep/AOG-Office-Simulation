@@ -77,46 +77,84 @@ html, body { overflow: hidden !important; }
 [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
 section[data-testid="stMain"] { overflow: hidden !important; height: 100vh; }
 section[data-testid="stMain"] > div { overflow: hidden !important; }
-div[data-testid="stMainBlockContainer"] {
+div[data-testid="stMainBlockContainer"], div.block-container {
   padding: 0 !important; max-width: none !important; width: 100%; min-height: 100vh;
 }
-/* anak ke-1: style (sembunyi), 2: panggung, 3: bar atas, 4: bar bawah, 5: drawer */
-div[data-testid="stMainBlockContainer"] > div:nth-child(1) { display: none; }
-div[data-testid="stMainBlockContainer"] > div:nth-child(2) { position: fixed; inset: 0; z-index: 1; }
-div[data-testid="stMainBlockContainer"] > div:nth-child(3) {
+/* error jangan pernah tertutup panggung */
+[data-testid="stException"], [data-testid="stAlert"][data-testid*="error"], .stError {
+  position: relative; z-index: 999 !important;
+}
+
+/* Posisi HUD dipilih lewat PENANDA kelas (tahan terhadap perubahan DOM
+   antar versi Streamlit), bukan urutan anak. */
+div[data-testid="stMainBlockContainer"] > div:has(> div > div > style),
+div[data-testid="stMainBlockContainer"] > div:has(style) { display: none; }
+div[data-testid="stMainBlockContainer"] > div:has(.office-wrap) {
+  position: fixed; inset: 0; z-index: 1;
+}
+div[data-testid="stMainBlockContainer"] > div:has(.hud-top) {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
   padding: 6px 10px !important;
 }
-div[data-testid="stMainBlockContainer"] > div:nth-child(4) {
+div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(10px); border-top: 1px solid var(--line);
   padding: 6px 10px !important; overflow-x: auto;
 }
-div[data-testid="stMainBlockContainer"] > div:nth-child(5) {
+div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) {
   position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
   width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
   padding: 12px 14px; box-shadow: 0 18px 60px rgba(2,6,23,.5);
 }
-div[data-testid="stMainBlockContainer"] > div:nth-child(5):empty { display: none; }
-div[data-testid="stMainBlockContainer"] > div:nth-child(5) [data-testid="stVerticalBlock"] { gap: .4rem; }
+div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) [data-testid="stVerticalBlock"] { gap: .4rem; }
 
-/* panggung memenuhi layar */
-.office-wrap { border: none; border-radius: 0; background: transparent; height: 100vh; }
+/* Fallback browser tua tanpa :has() — pakai urutan anak */
+@supports not (selector(:has(*))) {
+  div[data-testid="stMainBlockContainer"] > div:nth-child(1) { display: none; }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(2) { position: fixed; inset: 0; z-index: 1; }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(3) {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
+    padding: 6px 10px !important;
+  }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(4) {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(10px); border-top: 1px solid var(--line);
+    padding: 6px 10px !important; overflow-x: auto;
+  }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(5) {
+    position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
+    width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
+    padding: 12px 14px;
+  }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(5):empty { display: none; }
+}
+
+/* panggung memenuhi layar (wrapper DAN inner fixed, supaya tahan DOM apa pun) */
+.office-wrap {
+  border: none; border-radius: 0; background: transparent;
+  height: 100vh; position: fixed; inset: 0; z-index: 1;
+}
 .office-svg { width: 100%; height: 100vh; display: block; }
 
 /* tombol HUD bulat */
-div[data-testid="stMainBlockContainer"] > div:nth-child(3) .stButton > button,
-div[data-testid="stMainBlockContainer"] > div:nth-child(4) .stButton > button {
+div[data-testid="stMainBlockContainer"] > div:has(.hud-top) .stButton > button,
+div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) .stButton > button {
   width: 40px; height: 40px; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
 }
-div[data-testid="stMainBlockContainer"] > div:nth-child(3) p,
-div[data-testid="stMainBlockContainer"] > div:nth-child(4) p { margin: 0; }
+div[data-testid="stMainBlockContainer"] > div:has(.hud-top) p,
+div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) p { margin: 0; }
+.hud-bottom { height: 0; }
 .brand-line { display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .brand-line b { font-size: 14px; letter-spacing: .01em; }
 
@@ -126,9 +164,9 @@ div[data-testid="stMainBlockContainer"] > div:nth-child(4) p { margin: 0; }
 
 /* layar sempit: perkecil */
 @media (max-width: 720px) {
-  div[data-testid="stMainBlockContainer"] > div:nth-child(5) { top: 50px; bottom: 54px; }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(3) .stButton > button,
-  div[data-testid="stMainBlockContainer"] > div:nth-child(4) .stButton > button { width: 34px; height: 34px; }
+  div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) { top: 50px; bottom: 54px; }
+  div[data-testid="stMainBlockContainer"] > div:has(.hud-top) .stButton > button,
+  div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) .stButton > button { width: 34px; height: 34px; }
   .brand-line .tiny { display: none; }
 }
 
@@ -223,7 +261,7 @@ def top_bar() -> None:
     cols = st.columns([3] + [1] * len(TOPBAR), gap="small", vertical_alignment="center")
     with cols[0]:
         st.markdown(
-            f'<div class="brand-line">{icon_svg("apartment", 20, "var(--accent)")}'
+            f'<div class="brand-line hud-top">{icon_svg("apartment", 20, "var(--accent)")}'
             f'<div><b>{APP_NAME}</b><div class="tiny">{configuration.get("boss_name", "Bos")} · '
             f'hari ke-{summ["day"]} · {chip(str(summ["pending"]), "warn", "hourglass_bottom", 11)} '
             f'{chip(str(summ["inbox_unread"]), "bad" if summ["inbox_unread"] else "muted", "mark_chat_unread", 11)}</div></div></div>',
@@ -255,6 +293,8 @@ def bottom_bar() -> None:
         room = ROOMS[rid]
         aktif = st.session_state.get("selected_room") == rid and st.session_state.get("drawer") == "kantor"
         with col:
+            if rid == ROOM_ORDER[0]:
+                st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
             if st.button(
                 " ",
                 key=f"bb_{rid}",
