@@ -58,6 +58,49 @@ def has_key(provider: str) -> bool:
     return bool(get_key(provider))
 
 
+def _escape_toml(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def read_secrets_file() -> dict[str, str]:
+    """Baca kunci yang tersimpan di .streamlit/secrets.toml (bila ada)."""
+    try:
+        import tomllib
+
+        with open(SECRETS_FILE, "rb") as fh:
+            data = tomllib.load(fh)
+        return {k: str(v) for k, v in data.items() if isinstance(v, (str, int, float))}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+def write_secrets_file(values: dict[str, str]) -> list[str]:
+    """Gabungkan kunci baru ke secrets.toml tanpa menghapus kunci lama.
+
+    Mengembalikan daftar nama kunci yang benar-benar ditulis.
+    """
+    current = read_secrets_file()
+    written = []
+    for key, value in values.items():
+        value = (value or "").strip()
+        if not value:
+            continue
+        current[key] = value
+        written.append(key)
+    if not written:
+        return written
+    os.makedirs(os.path.dirname(SECRETS_FILE), exist_ok=True)
+    lines = [f'{k} = "{_escape_toml(v)}"' for k, v in current.items()]
+    header = "# Kunci API AOG Virtual Office (jangan commit berkas ini)\n"
+    tmp = SECRETS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(header + "\n".join(lines) + "\n")
+    os.replace(tmp, SECRETS_FILE)
+    return written
+
+
 # ----------------------------------------------------------------------------- provider
 PROVIDERS: dict[str, dict] = {
     "groq": {
@@ -102,6 +145,7 @@ TICK_MS = 1500  # interval auto-refresh panggung kantor
 # ----------------------------------------------------------------------------- path
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT_DIR, "data")
+SECRETS_FILE = os.path.join(ROOT_DIR, ".streamlit", "secrets.toml")
 STATE_FILE = os.path.join(DATA_DIR, "office_state.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 EXPORT_DIR = os.path.join(DATA_DIR, "exports")
