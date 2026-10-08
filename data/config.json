@@ -1,0 +1,44 @@
+{
+  "boss_name": "Boss Ampera",
+  "company": "Ampera Official Group",
+  "theme": "night",
+  "auto_approve": false,
+  "auto_refresh": true,
+  "tick_ms": 1500,
+  "show_model_badges": true,
+  "sound": false,
+  "github": {
+    "owner": "amperaofficial26-beep",
+    "repos": [
+      "AOG-Office-Simulation",
+      "Ampera-Web-Design",
+      "Ampera-Scribe",
+      "Room-Chat-Ampera-Group"
+    ],
+    "branch": "main",
+    "auto_sync": true
+  },
+  "streamlit_apps": [
+    {
+      "name": "Ampera Web Design",
+      "url": "",
+      "repo": "Ampera-Web-Design",
+      "owner": "Karyawan Desain",
+      "status": "belum dicek"
+    },
+    {
+      "name": "Ampera Scribe",
+      "url": "",
+      "repo": "Ampera-Scribe",
+      "owner": "Karyawan Dokumentasi",
+      "status": "belum dicek"
+    },
+    {
+      "name": "Room Chat Ampera Group",
+      "url": "",
+      "repo": "Room-Chat-Ampera-Group",
+      "owner": "Karyawan Hummas",
+      "status": "belum dicek"
+    }
+  ]
+}
