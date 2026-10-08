@@ -187,12 +187,12 @@ div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) p { margin: 0; }
 # ----------------------------------------------------------------------------- dasar
 def css() -> None:
     cfg = load_config()
-    # Pakai st.html (bukan st.markdown): isi tidak di-parse sebagai Markdown,
-    # jadi karakter CSS seperti "*" di [attr*="..."] tidak memecah blok <style>.
-    # Konten style-only dikirim Streamlit ke event container sehingga CSS-nya
-    # diterapkan global ke DOM tanpa memakai ruang / menambah elemen terlihat.
-    st.html(f"<style>{base_css(get_theme(cfg.get('theme', 'night')))}</style>")
-    st.html(f"<style>{HUD_CSS}</style>")
+    # CSS dikirim lewat st.markdown(unsafe_allow_html=True), bukan st.html:
+    # st.html menyaring HTML dengan DOMPurify dan MEMBUANG tag <style>, sehingga
+    # tema & tata letak HUD tidak pernah diterapkan. Blok <style> adalah HTML
+    # block mentah sehingga karakter CSS seperti "*" di [attr*="..."] aman.
+    st.markdown(f"<style>{base_css(get_theme(cfg.get('theme', 'night')))}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{HUD_CSS}</style>", unsafe_allow_html=True)
 
 
 def S() -> dict[str, Any]:
@@ -504,11 +504,14 @@ def panel_inbox() -> None:
         st.info("Kotak pesan kosong. Tekan 'Simulasi pesan masuk' untuk meramaikan.")
         return
     for msg in inbox[:15]:
+        subj = f"<b>{msg['subject']}</b>"
+        ch_icon = "alternate_email" if msg.get("channel") == "email" else "forum"
+        when = time.strftime("%d %b %H:%M", time.localtime(msg.get("at", 0)))
         st.markdown(
             f'<div class="card {"soft" if msg.get("read") else "warn"}">'
-            f'<div class="row between">{labeled("alternate_email" if msg.get("channel") == "email" else "forum", f"<b>{msg["subject"]}</b>", 15)}'
+            f'<div class="row between">{labeled(ch_icon, subj, 15)}'
             f'{chip(msg.get("channel", ""), "", "language", 12)}</div>'
-            f'<div class="tiny">dari {msg.get("sender")} · {time.strftime("%d %b %H:%M", time.localtime(msg.get("at", 0)))}</div>'
+            f'<div class="tiny">dari {msg.get("sender")} · {when}</div>'
             f'<div class="small" style="margin-top:6px">{msg.get("body", "")}</div></div>',
             unsafe_allow_html=True,
         )
@@ -529,6 +532,7 @@ def panel_inbox() -> None:
 # ----------------------------------------------------------------------------- persetujuan
 def task_card(state: dict[str, Any], task: dict[str, Any], approve_key: str) -> None:
     emp = state.get("employees", {}).get(task["assignee"], {})
+    dur_chip = chip(f"{task.get('duration', 0)} dtk", "muted", "schedule", 12)
     st.markdown(
         f'<div class="task-item"><div class="row between"><span class="t">{task["title"]}</span>'
         f'{chip(task["status"], "warn" if task["status"] == TASK_REVIEW else "", task.get("state_icon", "assignment"))}</div>'
@@ -536,7 +540,7 @@ def task_card(state: dict[str, Any], task: dict[str, Any], approve_key: str) -> 
         f'{chip(emp.get("name", "-"), "", "badge", 12)}'
         f'{chip(task.get("provider_used") or "-", "muted", "hub", 12)}'
         f'{chip(task.get("model_used") or "-", "muted", "memory", 12)}'
-        f'{chip(f"{task.get('duration', 0)} dtk", "muted", "schedule", 12)}</div>'
+        f'{dur_chip}</div>'
         f'<div class="tiny">Brief: {task["brief"][:220]}</div></div>',
         unsafe_allow_html=True,
     )
@@ -600,14 +604,17 @@ def panel_karyawan() -> None:
         st.warning("Roster belum termuat.")
         return
     emp = state["employees"][eid]
+    name_html = f"<b>{emp['name']}</b>"
+    level_chip = chip(f"Level {emp.get('level', 1)}", "ok", "military_tech")
+    done_chip = chip(f"{emp.get('tasks_done', 0)} selesai", "", "task_alt")
     st.markdown(
         f'<div class="card accent"><div class="row between"><div>'
-        f'{labeled("badge", f"<b>{emp['name']}</b>", 18)}'
+        f'{labeled("badge", name_html, 18)}'
         f'<div class="small">{emp.get("title")} · {ROOMS.get(emp.get("room"), None).name if ROOMS.get(emp.get("room")) else "-"}</div>'
         f'<div class="tiny" style="margin-top:4px">{emp.get("personality")}</div></div>'
         f'<div class="row">{chip(state_label(emp.get("state", "")), "", EMP_ICON.get(emp.get("state", ""), "widgets"))}'
-        f'{chip(f"Level {emp.get('level', 1)}", "ok", "military_tech")}'
-        f'{chip(f"{emp.get('tasks_done', 0)} selesai", "", "task_alt")}</div></div></div>',
+        f'{level_chip}'
+        f'{done_chip}</div></div></div>',
         unsafe_allow_html=True,
     )
     c = st.columns(3)
@@ -674,10 +681,12 @@ def panel_github() -> None:
     else:
         try:
             me = gh.whoami()
+            me_title = f"<b>Terhubung sebagai {me['login'] or '?'}</b>"
+            me_repos = f"{me['public_repos']} repo publik"
             st.markdown(
                 f'<div class="card ok"><div class="row between">'
-                f'{labeled("github", f"<b>Terhubung sebagai {me['login'] or '?'}</b>", 16)}'
-                f'<div class="row">{chip(f"{me['public_repos']} repo publik", "", "folder", 12)}'
+                f'{labeled("github", me_title, 16)}'
+                f'<div class="row">{chip(me_repos, "", "folder", 12)}'
                 f'{chip(me["plan"] or "akun gratis", "muted", "badge", 12)}</div></div></div>',
                 unsafe_allow_html=True,
             )
@@ -720,17 +729,20 @@ def panel_github() -> None:
         with st.expander(f"{owner_now}/{repo}", expanded=False):
             try:
                 detail = gh.repo_detail(owner_now, repo)
+                stars_chip = chip(f"{detail['stars']} bintang", "", "star")
+                issues_chip = chip(f"{detail['open_issues']} isu", "warn", "bug_report")
                 st.markdown(
                     f'<div class="row">{chip(detail["language"], "", "code")}'
-                    f'{chip(f"{detail['stars']} bintang", "", "star")}'
-                    f'{chip(f"{detail['open_issues']} isu", "warn", "bug_report")}'
+                    f'{stars_chip}'
+                    f'{issues_chip}'
                     f'{chip(detail["default_branch"], "muted", "alt_route")}</div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown("**Commit terakhir**")
                 for commit in gh.commits(owner_now, repo, limit=5):
+                    commit_head = f"{commit['sha']} — {commit['message']}"
                     st.markdown(
-                        f'<div class="card soft" style="padding:6px 10px">{labeled("commit", f"{commit['sha']} — {commit['message']}", 13)}'
+                        f'<div class="card soft" style="padding:6px 10px">{labeled("commit", commit_head, 13)}'
                         f'<div class="tiny">{commit["author"]} · {commit["date"][:10]}</div></div>',
                         unsafe_allow_html=True,
                     )
@@ -739,7 +751,8 @@ def panel_github() -> None:
                     st.markdown("**Isu & PR terbuka**")
                     for item in items:
                         icon_name = "merge_type" if item.get("is_pr") else "bug_report"
-                        st.markdown(f'<div class="tiny">{labeled(icon_name, f"#{item["number"]} {item["title"]}", 12)}</div>', unsafe_allow_html=True)
+                        item_title = f"#{item['number']} {item['title']}"
+                        st.markdown(f'<div class="tiny">{labeled(icon_name, item_title, 12)}</div>', unsafe_allow_html=True)
                 tree = gh.file_tree(owner_now, repo, detail["default_branch"], limit=40)
                 if tree:
                     st.markdown("**Berkas utama**")
@@ -803,12 +816,14 @@ def panel_models() -> None:
         meta = PROVIDERS[provider]
         info = health[provider]
         tone = "ok" if info["key_present"] else "bad"
+        prov_title = f"<b>{meta['label']}</b>"
+        catalog_chip = chip(f"{info['catalog_count']} model", "muted", "memory", 11)
         st.markdown(
             f'<div class="card" style="border-top:3px solid {meta["color"]}">'
-            f'{labeled("key" if info["key_present"] else "lock", f"<b>{meta['label']}</b>", 16)}'
+            f'{labeled("key" if info["key_present"] else "lock", prov_title, 16)}'
             f'<div class="small" style="margin-top:4px">{meta["tagline"]}</div>'
             f'<div class="row" style="margin-top:6px">{chip(info["key_env"], tone, "key", 11)}'
-            f'{chip(f"{info['catalog_count']} model", "muted", "memory", 11)}</div>'
+            f'{catalog_chip}</div>'
             f'<div class="tiny" style="margin-top:6px">Gratis: {meta["free_tier"]}</div></div>',
             unsafe_allow_html=True,
         )
