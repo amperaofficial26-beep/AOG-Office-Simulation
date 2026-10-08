@@ -113,30 +113,32 @@ div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) {
 }
 div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) [data-testid="stVerticalBlock"] { gap: .4rem; }
 
-/* Fallback browser tua tanpa :has() — pakai urutan anak */
+/* Fallback browser tua tanpa :has() — pakai urutan anak.
+   Catatan: CSS kini disuntik lewat st.html (event container), jadi TIDAK ada
+   div CSS di stMainBlockContainer. Urutan anak: 1=panggung, 2=topbar,
+   3=bottombar, 4=drawer. */
 @supports not (selector(:has(*))) {
-  div[data-testid="stMainBlockContainer"] > div:nth-child(1) { display: none; }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(2) { position: fixed; inset: 0; z-index: 1; }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(3) {
+  div[data-testid="stMainBlockContainer"] > div:nth-child(1) { position: fixed; inset: 0; z-index: 1; }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(2) {
     position: fixed; top: 0; left: 0; right: 0; z-index: 30;
     background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
     padding: 6px 10px !important;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(4) {
+  div[data-testid="stMainBlockContainer"] > div:nth-child(3) {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
     background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(10px); border-top: 1px solid var(--line);
     padding: 6px 10px !important; overflow-x: auto;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(5) {
+  div[data-testid="stMainBlockContainer"] > div:nth-child(4) {
     position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
     width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
     padding: 12px 14px;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(5):empty { display: none; }
+  div[data-testid="stMainBlockContainer"] > div:nth-child(4):empty { display: none; }
 }
 
 /* panggung memenuhi layar (wrapper DAN inner fixed, supaya tahan DOM apa pun) */
@@ -185,7 +187,12 @@ div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) p { margin: 0; }
 # ----------------------------------------------------------------------------- dasar
 def css() -> None:
     cfg = load_config()
-    st.markdown(f"<style>{base_css(get_theme(cfg.get('theme', 'night')))}</style>{''}<style>{HUD_CSS}</style>", unsafe_allow_html=True)
+    # Pakai st.html (bukan st.markdown): isi tidak di-parse sebagai Markdown,
+    # jadi karakter CSS seperti "*" di [attr*="..."] tidak memecah blok <style>.
+    # Konten style-only dikirim Streamlit ke event container sehingga CSS-nya
+    # diterapkan global ke DOM tanpa memakai ruang / menambah elemen terlihat.
+    st.html(f"<style>{base_css(get_theme(cfg.get('theme', 'night')))}</style>")
+    st.html(f"<style>{HUD_CSS}</style>")
 
 
 def S() -> dict[str, Any]:
