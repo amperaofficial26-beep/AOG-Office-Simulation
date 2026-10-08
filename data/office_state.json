@@ -1,0 +1,21 @@
+{
+  "schema": 3,
+  "created_at": 1791447878.5720618,
+  "sim_clock": 1791447878.9879458,
+  "day": 1,
+  "employees": {},
+  "tasks": [],
+  "inbox": [],
+  "log": [],
+  "releases": [],
+  "stats": {
+    "tasks_created": 0,
+    "tasks_done": 0,
+    "tasks_rejected": 0,
+    "tasks_revised": 0,
+    "api_calls": 0,
+    "api_errors": 0,
+    "releases": 0,
+    "xp": 0
+  }
+}
