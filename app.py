@@ -51,6 +51,8 @@ from office.state import export_snapshot, load_config, load_state, reset_state, 
 from office.ui.characters import state_label
 from office.ui.office_view import render_office, room_legend
 from office.ui.theme import bar, base_css, chip, progress_row, section, stat_block, theme as get_theme
+from office.ui.stage3d import render_stage_3d
+render_stage_3d(ROOMS, employees_state, height=640)
 
 st.set_page_config(page_title=APP_NAME, layout="wide", initial_sidebar_state="collapsed")
 
