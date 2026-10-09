@@ -3,7 +3,7 @@
 Pengganti panggung SVG isometrik: ruangan, furnitur, dan karyawan digambar sebagai
 objek 3D low-poly kartun dengan kamera orthographic miring (gaya Two Point Hospital).
 
-Pemakaian di app.py (ganti pemanggilan panggung SVG lama):
+Pemakaian di app.py (tidak berubah):
 
     from office.ui.stage3d import render_stage_3d
     render_stage_3d(ROOMS, employees_state, height=640)
@@ -12,15 +12,31 @@ Pemakaian di app.py (ganti pemanggilan panggung SVG lama):
 - ``employees_state``  : dict ``eid -> dict`` (hasil ``sync_employees``) atau daftar ``Employee``
 - ``quality``          : "high" (bayangan lembut) atau "low" (tanpa bayangan, untuk perangkat lemah)
 
+CARA KERJA (anti kedip)
+-----------------------
+Versi lama mengirim ulang seluruh HTML tiap fragmen dijalankan (2 detik). Begitu isi HTML
+berubah sedikit saja, Streamlit memasang ulang iframe, Three.js dibuat ulang, dan layar berkedip.
+
+Sekarang panggung dipasang sebagai *komponen Streamlit dua arah* (``declare_component``):
+iframe dipasang SEKALI, lalu tiap tick Python hanya mengirim data terbaru lewat
+``postMessage``; skrip di dalam iframe memperbarui target jalan, aktivitas, dan badge tanpa
+memuat ulang. Iframe baru dimuat ulang hanya bila tata letak/penampilan karyawan berubah
+(``sig`` berbeda), misalnya setelah reset kantor.
+
+Bila komponen gagal dibuat (mis. folder tidak bisa ditulis), otomatis kembali ke mode lama
+(``st.iframe`` bila ada, atau ``components.html`` di Streamlit versi lama).
+
 Pratinjau tanpa Streamlit (membuat berkas HTML yang bisa dibuka di browser):
 
     python -m office.ui.stage3d
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import tempfile
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 try:  # nilai state asli dari proyek
     from ..models_data import EMP_COFFEE, EMP_GAMING, EMP_IDLE, EMP_NAP, EMP_WALKING
@@ -28,6 +44,8 @@ except Exception:  # pragma: no cover - modul dipakai terpisah
     EMP_COFFEE = EMP_GAMING = EMP_IDLE = EMP_NAP = EMP_WALKING = None
 
 THREE_URL = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+COMPONENT_NAME = "aog_stage_3d"
+COMPONENT_KEY = "aog_stage_3d"
 
 DEFAULT_LOOKS: dict[str, Any] = {
     "skin": "#F6C9A0",
@@ -97,6 +115,11 @@ def _xy(value: Any, default: tuple[float, float] = (0.5, 0.5)) -> tuple[float, f
         return default
 
 
+def _r3(v: float) -> float:
+    """Bulatkan ke 3 desimal supaya noise float tidak membuat payload 'berubah'."""
+    return round(float(v), 3)
+
+
 def _roster_helpers():
     """Ambil helper denah dari roster; kembalikan (desk_spots, desk_spot, break_spot)."""
     try:
@@ -105,6 +128,27 @@ def _roster_helpers():
         return DESK_SPOTS, desk_spot, break_spot
     except Exception:  # pragma: no cover - dipakai bila modul dijalankan terpisah
         return {}, None, None
+
+
+def _signature(out_rooms: list[dict[str, Any]], out_emps: list[dict[str, Any]], quality: str) -> str:
+    """Sidik jari bagian STATIS (tata letak + penampilan). Berubah => iframe dimuat ulang.
+
+    Aktivitas, target jalan, model, dan badge sengaja TIDAK ikut: itu dikirim lewat pesan.
+    """
+    stable = {
+        "q": quality,
+        "rooms": [
+            {k: r[k] for k in ("rid", "name", "color", "gx", "gy", "gw", "gh", "furniture", "spots", "lounge")}
+            for r in out_rooms
+        ],
+        "emps": [
+            {k: e[k] for k in ("eid", "name", "room", "deskx", "deskz",
+                               "skin", "hair", "shirt", "accent", "glasses", "hair_style")}
+            for e in out_emps
+        ],
+    }
+    raw = json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:12]
 
 
 def build_payload(
@@ -161,6 +205,7 @@ def build_payload(
                 sx, sy = desk_spot(target_room, slot % 3)
                 target, face = (sx, sy + 1.3), 3.14159  # tamu: berdiri di depan meja
         activity = activity_of(state, target_room)
+        tx, tz = _r3(target[0]), _r3(target[1])
         out_emps.append(
             {
                 "eid": eid,
@@ -170,9 +215,9 @@ def build_payload(
                 "activity": activity,
                 "label": ACTIVITY_LABEL[activity],
                 "room": room,
-                "x": target[0], "z": target[1],
-                "tx": target[0], "tz": target[1],
-                "deskx": desk[0], "deskz": desk[1],
+                "x": tx, "z": tz,
+                "tx": tx, "tz": tz,
+                "deskx": _r3(desk[0]), "deskz": _r3(desk[1]),
                 "face": face,
                 **looks,
             }
@@ -188,17 +233,85 @@ def build_payload(
                 "glasses": False, "hair_style": "short",
             }
         )
-    return {"rooms": out_rooms, "employees": out_emps,
-            "quality": "low" if quality == "low" else "high"}
+    q = "low" if quality == "low" else "high"
+    return {
+        "rooms": out_rooms,
+        "employees": out_emps,
+        "quality": q,
+        "badges": {r["rid"]: r["badge"] for r in out_rooms},
+        "sig": _signature(out_rooms, out_emps, q),
+    }
 
 
 def build_html(payload: dict[str, Any], height: int = 640) -> str:
+    """HTML mandiri (data tertanam). Dipakai untuk mode cadangan dan pratinjau."""
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return (
         _TEMPLATE.replace("__THREE__", THREE_URL)
         .replace("__HEIGHT__", str(int(height)))
         .replace("__DATA__", data)
     )
+
+
+def _component_html() -> str:
+    """HTML untuk komponen dua arah: tanpa data tertanam, menunggu pesan dari Streamlit."""
+    return (
+        _TEMPLATE.replace("__THREE__", THREE_URL)
+        .replace("__HEIGHT__", "700")
+        .replace("__DATA__", "null")
+    )
+
+
+# ----------------------------------------------------------------------------- komponen Streamlit
+_component_func: Any = None  # None = belum dicoba, False = gagal, selain itu = fungsi komponen
+
+
+def _get_component() -> Any:
+    """Buat (sekali) komponen Streamlit dua arah dari template; None bila tidak bisa."""
+    global _component_func
+    if _component_func is not None:
+        return _component_func or None
+    try:
+        import streamlit.components.v1 as components
+
+        html = _component_html()
+        candidates = [
+            Path(__file__).with_name("_stage3d_component"),
+            Path(tempfile.gettempdir()) / "aog_stage3d_component",
+        ]
+        folder = None
+        for cand in candidates:
+            try:
+                cand.mkdir(parents=True, exist_ok=True)
+                target = cand / "index.html"
+                if not target.exists() or target.read_text(encoding="utf-8") != html:
+                    target.write_text(html, encoding="utf-8")
+                folder = cand
+                break
+            except OSError:
+                continue
+        if folder is None:
+            _component_func = False
+            return None
+        _component_func = components.declare_component(COMPONENT_NAME, path=str(folder))
+    except Exception:  # pragma: no cover
+        _component_func = False
+    return _component_func or None
+
+
+def _show_html(html: str, height: int) -> None:
+    """Mode cadangan: tampilkan HTML mandiri. Pakai st.iframe bila ada (components.html deprecated)."""
+    import streamlit as st
+
+    if hasattr(st, "iframe"):
+        try:
+            st.iframe(html, height=height)
+            return
+        except Exception:  # pragma: no cover - tanda tangan API berbeda antar versi
+            pass
+    import streamlit.components.v1 as components
+
+    components.html(html, height=height, scrolling=False)
 
 
 def render_stage_3d(
@@ -210,16 +323,20 @@ def render_stage_3d(
     height: int = 700,
     quality: str = "high",
 ) -> None:
-    """Gambar panggung 3D di halaman Streamlit.
+    """Gambar panggung 3D di halaman Streamlit tanpa memuat ulang iframe tiap tick."""
+    payload = build_payload(rooms, employees, quality, boss_name, badges)
+    payload["height"] = int(height)
 
-    HTML dibuat deterministik (tanpa waktu/posisi sementara) agar Streamlit tidak memuat ulang
-    iframe pada setiap tick; iframe baru dimuat saat data benar-benar berubah, dan posisi karakter
-    serta kamera dilanjutkan lewat sessionStorage.
-    """
-    import streamlit.components.v1 as components
-
-    html = build_html(build_payload(rooms, employees, quality, boss_name, badges), height)
-    components.html(html, height=height, scrolling=False)
+    comp = _get_component()
+    if comp is not None:
+        try:
+            # key tetap => Streamlit TIDAK memasang ulang iframe saat argumen berubah;
+            # iframe hanya menerima pesan 'render' baru.
+            comp(payload=payload, key=COMPONENT_KEY, default=None)
+            return
+        except Exception:  # pragma: no cover
+            pass
+    _show_html(build_html(payload, height), height)
 
 
 # ----------------------------------------------------------------------------- template
@@ -229,7 +346,7 @@ _TEMPLATE = r"""<!doctype html>
 <style>
 html,body{margin:0;height:100%;background:#17202b;overflow:hidden;
   font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
-#wrap{position:relative;width:100%;height:100vh;touch-action:none}
+#wrap{position:relative;width:100%;height:100vh;touch-action:none;background:#17202b}
 canvas{display:block;cursor:grab}
 #tip{position:absolute;pointer-events:none;display:none;background:#FFF6D8;color:#3A2E1C;
   border:2px solid #3A2E1C;border-radius:10px;padding:6px 10px;font-size:12px;line-height:1.4;
@@ -257,8 +374,12 @@ canvas{display:block;cursor:grab}
 <script>
 (function(){
 "use strict";
-var D=__DATA__;
+/* EMBED = data tertanam (mode cadangan/pratinjau). null = mode komponen: data datang lewat pesan. */
+var EMBED=__DATA__;
+var booted=false,bootSig=null,applyFn=null;
 function showErr(m){var e=document.getElementById("err");e.textContent=m;e.style.display="block";}
+
+function boot(D){
 if(typeof THREE==="undefined"){showErr("Three.js gagal dimuat. Periksa koneksi internet lalu muat ulang.");return;}
 
 var wrap=document.getElementById("wrap");
@@ -389,12 +510,21 @@ function buildWalls(r){
     }
   });
   box(WT+0.07,WH+0.08,WT+0.07,mix(r.color,"#1B2433",0.2),r.gx,(WH+0.08)/2,r.gy);
-  // papan nama di dinding utara
+  // papan nama di dinding utara (disimpan agar badge bisa diperbarui tanpa muat ulang)
   var sign=new THREE.Mesh(new THREE.PlaneGeometry(1.7,0.32),
     new THREE.MeshBasicMaterial({map:signTex(r.name,r.color,r.badge||0)}));
   sign.position.set(r.gx+r.gw/2,1.3,r.gy+WT/2+0.012);scene.add(sign);
+  r._sign=sign;
 }
 rooms.forEach(buildWalls);
+
+function redrawSign(r){
+  if(!r._sign)return;
+  var old=r._sign.material.map;
+  r._sign.material.map=signTex(r.name,r.color,r.badge||0);
+  r._sign.material.needsUpdate=true;
+  if(old&&old.dispose)old.dispose();
+}
 
 /* ---------- furnitur ---------- */
 var WOOD="#C9965E",WOOD_D="#8F6538";
@@ -618,6 +748,24 @@ function saveView(){
   }catch(err){}
 }
 
+/* Perbarui data dinamis (aktivitas, target jalan, model, badge) TANPA membangun ulang scene. */
+function applyDyn(P){
+  var map={};
+  (P.employees||[]).forEach(function(n){map[n.eid]=n;});
+  chars.forEach(function(c){
+    var n=map[c.e.eid];if(!n)return;
+    var e=c.e;
+    e.activity=n.activity;e.label=n.label;e.model=n.model;e.role=n.role;e.face=n.face;
+    e.tx=n.tx;e.tz=n.tz;c.tx=n.tx;c.tz=n.tz;
+  });
+  var b=P.badges||{};
+  rooms.forEach(function(r){
+    var nb=b[r.rid]||0;
+    if(nb!==(r.badge||0)){r.badge=nb;redrawSign(r);}
+  });
+}
+applyFn=applyDyn;
+
 function animChar(c,dt,t){
   var e=c.e,dx=c.tx-c.x,dz=c.tz-c.z,dist=Math.hypot(dx,dz),moving=dist>0.04,want;
   if(moving){
@@ -740,6 +888,7 @@ function hover(ev){
 var last=0,lastSave=0;
 function frame(ms){
   var t=ms/1000,dt=Math.min(0.05,last?t-last:0.016);last=t;
+  if(wrap.clientWidth&&wrap.clientHeight&&(wrap.clientWidth!==W||wrap.clientHeight!==H))resize();
   chars.forEach(function(c){animChar(c,dt,t);});
   if(t-lastSave>0.5){lastSave=t;saveView();}
   screens.forEach(function(s,i){s.m.color.copy(s.base).multiplyScalar(0.82+0.18*Math.sin(t*2.2+i));});
@@ -748,6 +897,36 @@ function frame(ms){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+}/* akhir boot */
+
+/* ---------- penghubung ke Streamlit (mode komponen) ---------- */
+function setFrameHeight(h){
+  try{window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:h||700},"*");}catch(err){}
+}
+function safeReload(){
+  /* cegah loop muat-ulang bila sidik jari terus berubah */
+  var ok=true;
+  try{
+    var now=Date.now(),prev=+(window.sessionStorage.getItem("aog3d_rl")||0);
+    if(now-prev<4000)ok=false;else window.sessionStorage.setItem("aog3d_rl",String(now));
+  }catch(err){}
+  if(ok){try{window.location.reload();}catch(err){}}
+  return ok;
+}
+window.addEventListener("message",function(ev){
+  var m=ev.data;
+  if(!m||m.type!=="streamlit:render")return;
+  var P=m.args&&m.args.payload;
+  if(!P)return;
+  setFrameHeight(P.height);
+  if(!booted){booted=true;bootSig=P.sig;boot(P);return;}
+  if(P.sig!==bootSig&&safeReload())return;
+  if(applyFn)applyFn(P);
+});
+if(EMBED){booted=true;boot(EMBED);}
+else{
+  try{window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:componentReady",apiVersion:1},"*");}catch(err){}
+}
 })();
 </script>
 </body></html>
