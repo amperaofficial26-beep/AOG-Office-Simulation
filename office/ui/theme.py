@@ -103,12 +103,16 @@ p, span, li, label, div {{ color: inherit; }}
 .bar.thin {{ height: 4px; }}
 
 /* ---------- tombol ---------- */
-.stButton > button, .stFormSubmitButton > button {{
+/* Pakai descendant selector: di Streamlit 1.65 tombol terbungkus span tooltip
+   di dalam .stButton, sehingga ".stButton > button" tidak match. */
+.stButton button, .stFormSubmitButton button {{
   border-radius: 10px; border: 1px solid var(--line); background: var(--panel2);
   color: var(--text); font-weight: 600; padding: 6px 14px;
 }}
-.stButton > button:hover {{ border-color: var(--accent); color: var(--accent); }}
-.stButton > button[kind="primary"] {{ background: var(--accent); border-color: var(--accent); color: #06121f; }}
+.stButton button:hover {{ border-color: var(--accent); color: var(--accent); }}
+.stButton button[kind="primary"], .stButton button[data-testid="stBaseButton-primary"] {{
+  background: var(--accent); border-color: var(--accent); color: #06121f;
+}}
 div[data-testid="stMetricValue"] {{ font-size: 20px; }}
 
 /* ---------- input ---------- */
