@@ -22,6 +22,11 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+try:  # nilai state asli dari proyek
+    from ..models_data import EMP_COFFEE, EMP_GAMING, EMP_IDLE, EMP_NAP, EMP_WALKING
+except Exception:  # pragma: no cover - modul dipakai terpisah
+    EMP_COFFEE = EMP_GAMING = EMP_IDLE = EMP_NAP = EMP_WALKING = None
+
 THREE_URL = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
 
 DEFAULT_LOOKS: dict[str, Any] = {
@@ -63,7 +68,18 @@ def _items(items: Any) -> list[Any]:
     return list(items)
 
 
-def activity_of(state: Any) -> str:
+def activity_of(state: Any, target_room: str = "") -> str:
+    """Petakan state karyawan ke aktivitas visual: work / rest / sleep / idle."""
+    if EMP_IDLE is not None:
+        if state == EMP_NAP:
+            return "sleep"
+        if state in (EMP_COFFEE, EMP_GAMING):
+            return "rest"
+        if state == EMP_WALKING:
+            return "rest" if target_room == "break" else "work"
+        if state == EMP_IDLE:
+            return "idle"
+        return "work"  # state lain (mengetik/bekerja) = bekerja
     s = str(state or "").lower()
     if any(w in s for w in _SLEEP_WORDS):
         return "sleep"
@@ -91,7 +107,13 @@ def _roster_helpers():
         return {}, None, None
 
 
-def build_payload(rooms: Any, employees: Any, quality: str = "high") -> dict[str, Any]:
+def build_payload(
+    rooms: Any,
+    employees: Any,
+    quality: str = "high",
+    boss_name: str | None = None,
+    badges: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
     """Ubah data Room/Employee menjadi JSON sederhana untuk scene 3D."""
     desk_spots, desk_spot, break_spot = _roster_helpers()
     room_list = _items(rooms)
@@ -112,31 +134,37 @@ def build_payload(rooms: Any, employees: Any, quality: str = "high") -> dict[str
                 "furniture": list(_get(r, "furniture", ()) or ()),
                 "spots": [list(map(float, s)) for s in desk_spots.get(rid, [])],
                 "lounge": rid == "break",
+                "badge": int((badges or {}).get(rid, 0)),
             }
         )
 
     out_emps = []
+    rest_states = (EMP_COFFEE, EMP_GAMING, EMP_NAP) if EMP_IDLE is not None else ()
     for idx, e in enumerate(_items(employees)):
+        eid = _get(e, "eid", f"e{idx}")
         looks = {k: _get(e, k, v) or v for k, v in DEFAULT_LOOKS.items()}
         looks["glasses"] = bool(_get(e, "glasses", False))
         room = _get(e, "room", "")
+        state = _get(e, "state", "")
         desk = _xy(_get(e, "desk"))
         pos = _xy(_get(e, "pos"), desk)
-        target = pos
-        face = 0.0
         target_room = _get(e, "target_room", "") or ""
-        if target_room and target_room in room_ids:
+        slot = sum(map(ord, str(eid))) % 4  # stabil antar proses (hash() tidak stabil)
+        target, face = pos, 0.0
+        if state in rest_states and break_spot:
+            target = break_spot(slot)
+        elif target_room and target_room in room_ids and (EMP_WALKING is None or state == EMP_WALKING):
             if target_room == "break" and break_spot:
-                target = break_spot(idx)
+                target = break_spot(slot)
             elif target_room == room:
                 target = desk
             elif desk_spot:
-                sx, sy = desk_spot(target_room, 0)
-                target, face = (sx, sy + 1.3), 3.14159  # berdiri di depan meja, menghadap meja
-        activity = activity_of(_get(e, "state", ""))
+                sx, sy = desk_spot(target_room, slot % 3)
+                target, face = (sx, sy + 1.3), 3.14159  # tamu: berdiri di depan meja
+        activity = activity_of(state, target_room)
         out_emps.append(
             {
-                "eid": _get(e, "eid", f"e{idx}"),
+                "eid": eid,
                 "name": _get(e, "name", "Karyawan"),
                 "role": _get(e, "role_label", "") or _get(e, "role", ""),
                 "model": _get(e, "model", ""),
@@ -148,6 +176,17 @@ def build_payload(rooms: Any, employees: Any, quality: str = "high") -> dict[str
                 "deskx": desk[0], "deskz": desk[1],
                 "face": face,
                 **looks,
+            }
+        )
+    if boss_name:
+        bx, bz = (desk_spots.get("boss") or [(1.5, 0.8)])[0]
+        out_emps.append(
+            {
+                "eid": "boss", "name": boss_name, "role": "Bos", "model": "",
+                "activity": "idle", "label": "Memantau kantor", "room": "boss",
+                "x": bx, "z": bz, "tx": bx, "tz": bz, "deskx": bx, "deskz": bz, "face": 0.0,
+                "skin": "#E8B892", "hair": "#1B1512", "shirt": "#1F2937", "accent": "#FACC15",
+                "glasses": False, "hair_style": "short",
             }
         )
     return {"rooms": out_rooms, "employees": out_emps,
@@ -167,13 +206,20 @@ def render_stage_3d(
     rooms: Any,
     employees: Any,
     *,
-    height: int = 640,
+    boss_name: str | None = None,
+    badges: Mapping[str, int] | None = None,
+    height: int = 700,
     quality: str = "high",
 ) -> None:
-    """Gambar panggung 3D di halaman Streamlit."""
+    """Gambar panggung 3D di halaman Streamlit.
+
+    HTML dibuat deterministik (tanpa waktu/posisi sementara) agar Streamlit tidak memuat ulang
+    iframe pada setiap tick; iframe baru dimuat saat data benar-benar berubah, dan posisi karakter
+    serta kamera dilanjutkan lewat sessionStorage.
+    """
     import streamlit.components.v1 as components
 
-    html = build_html(build_payload(rooms, employees, quality), height)
+    html = build_html(build_payload(rooms, employees, quality, boss_name, badges), height)
     components.html(html, height=height, scrolling=False)
 
 
@@ -184,13 +230,13 @@ _TEMPLATE = r"""<!doctype html>
 <style>
 html,body{margin:0;height:100%;background:#17202b;overflow:hidden;
   font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
-#wrap{position:relative;width:100%;height:__HEIGHT__px;touch-action:none}
+#wrap{position:relative;width:100%;height:100vh;touch-action:none}
 canvas{display:block;cursor:grab}
 #tip{position:absolute;pointer-events:none;display:none;background:#FFF6D8;color:#3A2E1C;
   border:2px solid #3A2E1C;border-radius:10px;padding:6px 10px;font-size:12px;line-height:1.4;
   box-shadow:0 3px 0 rgba(0,0,0,.28);max-width:230px;z-index:3}
 #tip b{font-size:13px}
-#hud{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
+#hud{position:absolute;right:10px;top:64px;display:flex;gap:6px;z-index:2}
 #hud button{font:700 14px "Trebuchet MS",system-ui,sans-serif;color:#3A2E1C;background:#FFE9A8;
   border:2px solid #3A2E1C;border-radius:9px;min-width:36px;height:34px;padding:0 10px;
   box-shadow:0 3px 0 rgba(0,0,0,.3);cursor:pointer}
@@ -301,7 +347,7 @@ var CREAM=new THREE.Color("#EDE5A8"),CREAM2=new THREE.Color("#E4DA98"),LINE=new 
 
 /* ---------- dinding ---------- */
 var GOLD="#E2B33C";
-function signTex(text,color){
+function signTex(text,color,badge){
   var c=document.createElement("canvas");c.width=512;c.height=96;
   var x=c.getContext("2d");
   rr(x,6,6,500,84,26);x.fillStyle=mix(color,"#FFFFFF",0.3).getStyle();x.fill();
@@ -309,6 +355,10 @@ function signTex(text,color){
   var size=46;x.font="bold "+size+"px "+FONT;
   while(x.measureText(text).width>440&&size>20){size-=2;x.font="bold "+size+"px "+FONT;}
   x.fillStyle="#2A2216";x.textAlign="center";x.textBaseline="middle";x.fillText(text,256,50);
+  if(badge>0){
+    x.beginPath();x.arc(488,20,19,0,Math.PI*2);x.fillStyle="#EF4444";x.fill();x.lineWidth=4;x.strokeStyle="#FFFFFF";x.stroke();
+    x.fillStyle="#FFFFFF";x.font="bold 24px "+FONT;x.fillText(String(badge),488,21);
+  }
   return new THREE.CanvasTexture(c);
 }
 function wallPiece(len,h,c,x,y,z,alongX,thick,p){
@@ -342,7 +392,7 @@ function buildWalls(r){
   box(WT+0.07,WH+0.08,WT+0.07,mix(r.color,"#1B2433",0.2),r.gx,(WH+0.08)/2,r.gy);
   // papan nama di dinding utara
   var sign=new THREE.Mesh(new THREE.PlaneGeometry(1.7,0.32),
-    new THREE.MeshBasicMaterial({map:signTex(r.name,r.color)}));
+    new THREE.MeshBasicMaterial({map:signTex(r.name,r.color,r.badge||0)}));
   sign.position.set(r.gx+r.gw/2,1.3,r.gy+WT/2+0.012);scene.add(sign);
 }
 rooms.forEach(buildWalls);
@@ -555,7 +605,19 @@ function makeChar(e){
   hit.userData.c=c;g.position.set(c.x,0,c.z);g.rotation.y=c.yaw;
   return c;
 }
+var store=null,saved={};
+try{store=window.sessionStorage;saved=JSON.parse(store.getItem("aog3d")||"{}")||{};}catch(err){store=null;saved={};}
+var sp=saved.chars||{};
+emps.forEach(function(e){if(sp[e.eid]){e.x=sp[e.eid][0];e.z=sp[e.eid][1];}});
 var chars=emps.map(makeChar);
+function saveView(){
+  if(!store)return;
+  try{
+    var o={zoom:zoom,tg:tg,chars:{}};
+    chars.forEach(function(c){o.chars[c.e.eid]=[+c.x.toFixed(3),+c.z.toFixed(3)];});
+    store.setItem("aog3d",JSON.stringify(o));
+  }catch(err){}
+}
 
 function animChar(c,dt,t){
   var e=c.e,dx=c.tx-c.x,dz=c.tz-c.z,dist=Math.hypot(dx,dz),moving=dist>0.04,want;
@@ -611,10 +673,10 @@ sun.shadow.camera.near=1;sun.shadow.camera.far=60;sun.shadow.bias=-0.0006;
 scene.add(sun);scene.add(sun.target);
 
 var cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,200);
-var EL=0.70,AZ=Math.PI/4,zoom=1,tg={x:GW/2,y:0.4,z:GH/2},hh=10;
+var EL=0.70,AZ=Math.PI/4,zoom=saved.zoom||1,tg=saved.tg||{x:GW/2,y:0.4,z:GH/2},hh=10;
 function updateCam(){
   var aspect=W/H,span=(GW+GH)*Math.SQRT1_2;
-  var vw=span+2.2,vh=span*Math.sin(EL)+WH*Math.cos(EL)+2.6;
+  var vw=span+2.2,vh=(span*Math.sin(EL)+WH*Math.cos(EL)+2.6)*1.16;
   hh=Math.max(vw/aspect,vh)/2/zoom;
   cam.left=-hh*aspect;cam.right=hh*aspect;cam.top=hh;cam.bottom=-hh;cam.updateProjectionMatrix();
   var d=40;
@@ -676,10 +738,11 @@ function hover(ev){
 }
 
 /* ---------- loop ---------- */
-var last=0;
+var last=0,lastSave=0;
 function frame(ms){
   var t=ms/1000,dt=Math.min(0.05,last?t-last:0.016);last=t;
   chars.forEach(function(c){animChar(c,dt,t);});
+  if(t-lastSave>0.5){lastSave=t;saveView();}
   screens.forEach(function(s,i){s.m.color.copy(s.base).multiplyScalar(0.82+0.18*Math.sin(t*2.2+i));});
   leds.forEach(function(l){l.m.color.set(Math.sin(t*5+l.ph)>-0.2?"#34D399":"#14532D");});
   renderer.render(scene,cam);
