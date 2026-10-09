@@ -67,6 +67,7 @@ def stage_badges(state: dict[str, Any]) -> dict[str, int]:
 
 @st.fragment(run_every=2.0)
 def stage() -> None:
+    st.toast("Panggung 3D aktif")
     state = S()
     engine.tick(state)
     render_stage_3d(
