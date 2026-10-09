@@ -96,6 +96,7 @@ div[data-testid="stMainBlockContainer"], div.block-container {
    (level "> div > div"), BUKAN anak langsung stMainBlockContainer. Versi lama
    yang menarget "stMainBlockContainer > div:has(style)" justru mengenai
    stVerticalBlock induk lalu menyembunyikan SELURUH aplikasi (layar hitam). */
+div[data-testid="stElementContainer"][data-stale="true"] { opacity: 1 !important; transition: none !important; }
 div[data-testid="stElementContainer"]:has(style),
 div[data-testid="stMainBlockContainer"] > div > div:has(style) { display: none; }
 div[data-testid="stMainBlockContainer"] > div > div:has(.office-wrap) {
