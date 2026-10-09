@@ -86,59 +86,68 @@ div[data-testid="stMainBlockContainer"], div.block-container {
 }
 
 /* Posisi HUD dipilih lewat PENANDA kelas (tahan terhadap perubahan DOM
-   antar versi Streamlit), bukan urutan anak. */
-div[data-testid="stMainBlockContainer"] > div:has(> div > div > style),
-div[data-testid="stMainBlockContainer"] > div:has(style) { display: none; }
-div[data-testid="stMainBlockContainer"] > div:has(.office-wrap) {
+   antar versi Streamlit), bukan urutan anak.
+
+   Struktur DOM Streamlit (1.65): stMainBlockContainer hanya berisi SATU
+   stVerticalBlock, dan setiap elemen utama terbungkus lagi dalam satu wrapper
+   (stElementContainer untuk markdown, stLayoutWrapper untuk columns/fragment/
+   container). Karena itu selektor di bawah menarget ANAK LANGSUNG stVerticalBlock
+   (level "> div > div"), BUKAN anak langsung stMainBlockContainer. Versi lama
+   yang menarget "stMainBlockContainer > div:has(style)" justru mengenai
+   stVerticalBlock induk lalu menyembunyikan SELURUH aplikasi (layar hitam). */
+div[data-testid="stElementContainer"]:has(style),
+div[data-testid="stMainBlockContainer"] > div > div:has(style) { display: none; }
+div[data-testid="stMainBlockContainer"] > div > div:has(.office-wrap) {
   position: fixed; inset: 0; z-index: 1;
 }
-div[data-testid="stMainBlockContainer"] > div:has(.hud-top) {
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
   padding: 6px 10px !important;
 }
-div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) {
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(10px); border-top: 1px solid var(--line);
   padding: 6px 10px !important; overflow-x: auto;
 }
-div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) {
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
   position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
   width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
   padding: 12px 14px; box-shadow: 0 18px 60px rgba(2,6,23,.5);
 }
-div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) [data-testid="stVerticalBlock"] { gap: .4rem; }
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) [data-testid="stVerticalBlock"] { gap: .4rem; }
 
-/* Fallback browser tua tanpa :has() — pakai urutan anak.
-   Catatan: CSS kini disuntik lewat st.html (event container), jadi TIDAK ada
-   div CSS di stMainBlockContainer. Urutan anak: 1=panggung, 2=topbar,
-   3=bottombar, 4=drawer. */
+/* Fallback browser tua tanpa :has() — pakai urutan anak dari stVerticalBlock.
+   Urutan anak: 1,2 = blok <style> CSS (disembunyikan), 3 = panggung kantor,
+   4 = bar atas, 5 = bar bawah, 6 = drawer (hanya saat terbuka). */
 @supports not (selector(:has(*))) {
-  div[data-testid="stMainBlockContainer"] > div:nth-child(1) { position: fixed; inset: 0; z-index: 1; }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(2) {
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(1),
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(2) { display: none; }
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(3) { position: fixed; inset: 0; z-index: 1; }
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(4) {
     position: fixed; top: 0; left: 0; right: 0; z-index: 30;
     background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
     padding: 6px 10px !important;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(3) {
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(5) {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
     background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(10px); border-top: 1px solid var(--line);
     padding: 6px 10px !important; overflow-x: auto;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(4) {
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(6) {
     position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
     width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
     padding: 12px 14px;
   }
-  div[data-testid="stMainBlockContainer"] > div:nth-child(4):empty { display: none; }
+  div[data-testid="stMainBlockContainer"] > div > div:nth-child(6):empty { display: none; }
 }
 
 /* panggung memenuhi layar (wrapper DAN inner fixed, supaya tahan DOM apa pun) */
@@ -148,14 +157,15 @@ div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) [data-testid="st
 }
 .office-svg { width: 100%; height: 100vh; display: block; }
 
-/* tombol HUD bulat */
-div[data-testid="stMainBlockContainer"] > div:has(.hud-top) .stButton > button,
-div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) .stButton > button {
+/* tombol HUD bulat (pakai descendant: di Streamlit 1.65 tombol terbungkus
+   span tooltip di dalam .stButton, jadi "> button" tidak akan match) */
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) .stButton button,
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
   width: 40px; height: 40px; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
 }
-div[data-testid="stMainBlockContainer"] > div:has(.hud-top) p,
-div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) p { margin: 0; }
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) p,
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin: 0; }
 .hud-bottom { height: 0; }
 .brand-line { display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .brand-line b { font-size: 14px; letter-spacing: .01em; }
@@ -166,9 +176,9 @@ div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) p { margin: 0; }
 
 /* layar sempit: perkecil */
 @media (max-width: 720px) {
-  div[data-testid="stMainBlockContainer"] > div:has(.drawer-head) { top: 50px; bottom: 54px; }
-  div[data-testid="stMainBlockContainer"] > div:has(.hud-top) .stButton > button,
-  div[data-testid="stMainBlockContainer"] > div:has(.hud-bottom) .stButton > button { width: 34px; height: 34px; }
+  div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) { top: 50px; bottom: 54px; }
+  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) .stButton button,
+  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button { width: 34px; height: 34px; }
   .brand-line .tiny { display: none; }
 }
 
