@@ -147,10 +147,9 @@ def build_payload(
         room = _get(e, "room", "")
         state = _get(e, "state", "")
         desk = _xy(_get(e, "desk"))
-        pos = _xy(_get(e, "pos"), desk)
         target_room = _get(e, "target_room", "") or ""
         slot = sum(map(ord, str(eid))) % 4  # stabil antar proses (hash() tidak stabil)
-        target, face = pos, 0.0
+        target, face = desk, 0.0  # idle/bekerja: di meja sendiri
         if state in rest_states and break_spot:
             target = break_spot(slot)
         elif target_room and target_room in room_ids and (EMP_WALKING is None or state == EMP_WALKING):
@@ -171,7 +170,7 @@ def build_payload(
                 "activity": activity,
                 "label": ACTIVITY_LABEL[activity],
                 "room": room,
-                "x": pos[0], "z": pos[1],
+                "x": target[0], "z": target[1],
                 "tx": target[0], "tz": target[1],
                 "deskx": desk[0], "deskz": desk[1],
                 "face": face,
@@ -299,7 +298,7 @@ function mat(c){
 function mesh(geo,c,x,y,z,p){
   var m=new THREE.Mesh(geo,mat(c));
   m.position.set(x,y,z);m.castShadow=SH;m.receiveShadow=SH;
-  if(p)p.add(m);return m;
+  (p||scene).add(m);return m;
 }
 function box(w,h,d,c,x,y,z,p){return mesh(new THREE.BoxGeometry(w,h,d),c,x,y,z,p);}
 function cyl(rt,rb,h,c,x,y,z,p,seg){return mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),c,x,y,z,p);}
