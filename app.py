@@ -53,30 +53,6 @@ from office.ui.office_view import render_office, room_legend
 from office.ui.theme import bar, base_css, chip, progress_row, section, stat_block, theme as get_theme
 from office.ui.stage3d import render_stage_3d
 
-def stage_badges(state: dict[str, Any]) -> dict[str, int]:
-    out: dict[str, int] = {}
-    for msg in state.get("inbox", []):
-        if not msg.get("read"):
-            out["reception"] = out.get("reception", 0) + 1
-    for task in state.get("tasks", []):
-        if task.get("status") == TASK_REVIEW:
-            emp = state.get("employees", {}).get(task.get("assignee", ""), {})
-            rid = emp.get("room") or task.get("room") or "code"
-            out[rid] = out.get(rid, 0) + 1
-    return out
-
-@st.fragment(run_every=2.0)
-def stage() -> None:
-    st.toast("Panggung 3D aktif")
-    state = S()
-    engine.tick(state)
-    render_stage_3d(
-        ROOMS,
-        state.get("employees", {}),
-        boss_name=cfg().get("boss_name", "Bos"),
-        badges=stage_badges(state),
-    )
-
 st.set_page_config(page_title=APP_NAME, layout="wide", initial_sidebar_state="collapsed")
 
 DELIVERABLES = [
@@ -285,21 +261,29 @@ def open_drawer(name: str | None) -> None:
 
 
 # ----------------------------------------------------------------------------- panggung
+def stage_badges(state: dict[str, Any]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for msg in state.get("inbox", []):
+        if not msg.get("read"):
+            out["reception"] = out.get("reception", 0) + 1
+    for task in state.get("tasks", []):
+        if task.get("status") == TASK_REVIEW:
+            emp = state.get("employees", {}).get(task.get("assignee", ""), {})
+            rid = emp.get("room") or task.get("room") or "code"
+            out[rid] = out.get(rid, 0) + 1
+    return out
+
 @st.fragment(run_every=2.0)
 def stage() -> None:
+    st.toast("Panggung 3D aktif")
     state = S()
     engine.tick(state)
-    configuration = cfg()
-    st.markdown(
-        render_office(
-            state,
-            theme=configuration.get("theme", "night"),
-            selected_room=st.session_state.get("selected_room", ""),
-            selected_emp=st.session_state.get("selected_emp", ""),
-        ),
-        unsafe_allow_html=True,
+    render_stage_3d(
+        ROOMS,
+        state.get("employees", {}),
+        boss_name=cfg().get("boss_name", "Bos"),
+        badges=stage_badges(state),
     )
-
 
 # ----------------------------------------------------------------------------- HUD bar
 def top_bar() -> None:
