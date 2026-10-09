@@ -34,7 +34,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import tempfile
+import traceback
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -44,6 +47,10 @@ except Exception:  # pragma: no cover - modul dipakai terpisah
     EMP_COFFEE = EMP_GAMING = EMP_IDLE = EMP_NAP = EMP_WALKING = None
 
 THREE_URL = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+STAGE3D_VERSION = "v2-komponen"
+_log = logging.getLogger("aog.stage3d")
+_announced: set[str] = set()
+
 COMPONENT_NAME = "aog_stage_3d"
 COMPONENT_KEY = "aog_stage_3d"
 
@@ -266,6 +273,14 @@ def _component_html() -> str:
 _component_func: Any = None  # None = belum dicoba, False = gagal, selain itu = fungsi komponen
 
 
+def _announce(mode: str, detail: str = "") -> None:
+    """Catat SEKALI per proses mode yang dipakai, supaya mudah dilihat di log."""
+    if mode in _announced:
+        return
+    _announced.add(mode)
+    print(f"[stage3d {STAGE3D_VERSION}] mode={mode} {detail}".rstrip(), flush=True)
+
+
 def _get_component() -> Any:
     """Buat (sekali) komponen Streamlit dua arah dari template; None bila tidak bisa."""
     global _component_func
@@ -288,29 +303,29 @@ def _get_component() -> Any:
                     target.write_text(html, encoding="utf-8")
                 folder = cand
                 break
-            except OSError:
-                continue
+            except OSError as exc:
+                _log.warning("stage3d: folder %s tidak bisa ditulis: %s", cand, exc)
         if folder is None:
             _component_func = False
             return None
         _component_func = components.declare_component(COMPONENT_NAME, path=str(folder))
     except Exception:  # pragma: no cover
+        _log.warning("stage3d: komponen gagal dibuat:\n%s", traceback.format_exc())
         _component_func = False
     return _component_func or None
 
 
 def _show_html(html: str, height: int) -> None:
-    """Mode cadangan: tampilkan HTML mandiri. Pakai st.iframe bila ada (components.html deprecated)."""
+    """Mode cadangan: HTML mandiri lewat st.iframe (components.html hanya untuk Streamlit lama)."""
     import streamlit as st
 
     if hasattr(st, "iframe"):
-        try:
-            st.iframe(html, height=height)
-            return
-        except Exception:  # pragma: no cover - tanda tangan API berbeda antar versi
-            pass
+        _announce("cadangan-st.iframe")
+        st.iframe(html, height=height)
+        return
     import streamlit.components.v1 as components
 
+    _announce("cadangan-components.html")
     components.html(html, height=height, scrolling=False)
 
 
@@ -322,10 +337,17 @@ def render_stage_3d(
     badges: Mapping[str, int] | None = None,
     height: int = 700,
     quality: str = "high",
+    debug: bool = False,
 ) -> None:
-    """Gambar panggung 3D di halaman Streamlit tanpa memuat ulang iframe tiap tick."""
+    """Gambar panggung 3D di halaman Streamlit tanpa memuat ulang iframe tiap tick.
+
+    ``debug=True`` (atau env ``AOG_STAGE3D_DEBUG=1``) menampilkan penghitung kecil di pojok kiri
+    bawah panggung: ``boot`` naik = iframe dimuat ulang (penyebab kedip), ``upd`` naik = pembaruan normal.
+    """
     payload = build_payload(rooms, employees, quality, boss_name, badges)
     payload["height"] = int(height)
+    payload["debug"] = bool(debug or os.environ.get("AOG_STAGE3D_DEBUG"))
+    payload["version"] = STAGE3D_VERSION
 
     comp = _get_component()
     if comp is not None:
@@ -333,9 +355,10 @@ def render_stage_3d(
             # key tetap => Streamlit TIDAK memasang ulang iframe saat argumen berubah;
             # iframe hanya menerima pesan 'render' baru.
             comp(payload=payload, key=COMPONENT_KEY, default=None)
+            _announce("komponen")
             return
         except Exception:  # pragma: no cover
-            pass
+            _log.warning("stage3d: pemanggilan komponen gagal:\n%s", traceback.format_exc())
     _show_html(build_html(payload, height), height)
 
 
@@ -358,6 +381,7 @@ canvas{display:block;cursor:grab}
   box-shadow:0 3px 0 rgba(0,0,0,.3);cursor:pointer}
 #hud button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.3)}
 #hud button:focus-visible{outline:3px solid #38BDF8;outline-offset:2px}
+#dbg{position:absolute;left:8px;bottom:8px;z-index:5;display:none;font:11px monospace;color:#FFE9A8;background:rgba(0,0,0,.55);padding:3px 7px;border-radius:6px;pointer-events:none}
 #err{display:none;position:absolute;inset:0;color:#FFE9A8;padding:24px;font-size:15px;z-index:4}
 </style></head>
 <body>
@@ -369,6 +393,7 @@ canvas{display:block;cursor:grab}
   </div>
   <div id="tip"></div>
   <div id="err"></div>
+  <div id="dbg"></div>
 </div>
 <script src="__THREE__"></script>
 <script>
@@ -376,7 +401,8 @@ canvas{display:block;cursor:grab}
 "use strict";
 /* EMBED = data tertanam (mode cadangan/pratinjau). null = mode komponen: data datang lewat pesan. */
 var EMBED=__DATA__;
-var booted=false,bootSig=null,applyFn=null;
+var booted=false,bootSig=null,applyFn=null,nUpd=0,nBoot=0,dbgOn=false,dbgVer="";
+function showDbg(){var d=document.getElementById("dbg");if(!d)return;d.style.display=dbgOn?"block":"none";if(dbgOn)d.textContent=dbgVer+" | boot "+nBoot+" | upd "+nUpd;}
 function showErr(m){var e=document.getElementById("err");e.textContent=m;e.style.display="block";}
 
 function boot(D){
@@ -919,8 +945,14 @@ window.addEventListener("message",function(ev){
   var P=m.args&&m.args.payload;
   if(!P)return;
   setFrameHeight(P.height);
-  if(!booted){booted=true;bootSig=P.sig;boot(P);return;}
+  dbgOn=!!P.debug;dbgVer=P.version||"";
+  if(!booted){
+    booted=true;bootSig=P.sig;
+    try{nBoot=(+window.sessionStorage.getItem("aog3d_boots")||0)+1;window.sessionStorage.setItem("aog3d_boots",String(nBoot));}catch(err){nBoot=1;}
+    boot(P);showDbg();return;
+  }
   if(P.sig!==bootSig&&safeReload())return;
+  nUpd++;showDbg();
   if(applyFn)applyFn(P);
 });
 if(EMBED){booted=true;boot(EMBED);}
