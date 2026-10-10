@@ -19,7 +19,7 @@ import json
 import time
 import urllib.request
 
-from .config import CACHE_TTL, PROVIDERS, get_key
+from .config import CACHE_TTL, KIND_CHAT, PROVIDERS, get_key, get_account_id, provider_kind
 
 VERIFIED_AT = "2026-10-08"
 
@@ -290,6 +290,59 @@ MODELS: dict[str, dict] = {
         "tools": False,
         "note": "Ramah & ringan — resepsionis ruang penerima pesan.",
     },
+    # ---- Cloudflare Workers AI — FLUX.1 (keluaran GAMBAR) ---------------------
+    # "context" untuk model gambar = anggaran karakter prompt, bukan token chat.
+    "@cf/black-forest-labs/flux-1-schnell": {
+        "provider": "cloudflare",
+        "label": "FLUX.1 Schnell",
+        "context": 1024,
+        "tier": "gambar kilat",
+        "cost": "gratis (10K neuron/hari)",
+        "reasoning": False,
+        "tools": False,
+        "note": "Text-to-image tercepat di edge. 4 langkah sudah cukup untuk aset kantor.",
+    },
+    "@cf/black-forest-labs/flux-1-dev": {
+        "provider": "cloudflare",
+        "label": "FLUX.1 Dev",
+        "context": 1024,
+        "tier": "gambar final",
+        "cost": "berbayar per neuron",
+        "reasoning": False,
+        "tools": False,
+        "note": "Detail lebih halus — dipakai untuk aset kampanye yang benar-benar rilis.",
+    },
+    "@cf/bytedance/stable-diffusion-xl-lightning": {
+        "provider": "cloudflare",
+        "label": "SDXL Lightning",
+        "context": 1024,
+        "tier": "gambar cadangan",
+        "cost": "gratis (10K neuron/hari)",
+        "reasoning": False,
+        "tools": False,
+        "note": "Cadangan gratis bila kuota FLUX sedang habis.",
+    },
+    # ---- Tavily (keluaran PENCARIAN WEB) --------------------------------------
+    "tavily-search": {
+        "provider": "tavily",
+        "label": "Tavily Search",
+        "context": 4096,
+        "tier": "riset web",
+        "cost": "1 kredit/cari (1.000/bulan gratis)",
+        "reasoning": False,
+        "tools": True,
+        "note": "Pencarian dasar: jawaban ringkas plus daftar sumber bertautan asli.",
+    },
+    "tavily-search-advanced": {
+        "provider": "tavily",
+        "label": "Tavily Search Advanced",
+        "context": 8192,
+        "tier": "riset web mendalam",
+        "cost": "2 kredit/cari",
+        "reasoning": False,
+        "tools": True,
+        "note": "Penelusuran lebih dalam untuk riset yang butuh bukti kuat.",
+    },
 }
 
 # Model yang PASTI tidak dipakai lagi (sudah dimatikan provider) — dijaga agar
@@ -350,6 +403,17 @@ ROLE_FALLBACK: dict[str, list[str]] = {
         "openai/gpt-oss-safeguard-20b",
         "nvidia/nemotron-3.5-content-safety:free",
     ],
+    # Rantai di bawah ini berisi model non-chat: dipakai oleh imageai/websearch,
+    # dan otomatis dilewati oleh llm.chat_with_fallback.
+    "image_artist": [
+        "@cf/black-forest-labs/flux-1-schnell",
+        "@cf/bytedance/stable-diffusion-xl-lightning",
+        "@cf/black-forest-labs/flux-1-dev",
+    ],
+    "web_search": [
+        "tavily-search",
+        "tavily-search-advanced",
+    ],
 }
 
 ALL_FALLBACK = [
@@ -389,6 +453,16 @@ def provider_of(model_id: str) -> str:
     return MODELS.get(model_id, {}).get("provider", "")
 
 
+def modality_of(model_id: str) -> str:
+    """Jenis keluaran sebuah model: 'chat', 'image', atau 'search'."""
+    return provider_kind(provider_of(model_id))
+
+
+def models_for_kind(kind: str) -> dict[str, dict]:
+    """Katalog model berdasarkan jenis keluaran (dipakai rantai fallback non-chat)."""
+    return {k: v for k, v in MODELS.items() if provider_kind(v["provider"]) == kind}
+
+
 # ----------------------------------------------------------------------------- probe live
 def _fetch_json(url: str, key: str = "", timeout: int = 20) -> dict | list:
     headers = {
@@ -404,16 +478,17 @@ def _fetch_json(url: str, key: str = "", timeout: int = 20) -> dict | list:
 
 
 def _normalise_ids(payload, provider: str) -> set[str]:
-    """Ubah payload /models tiap provider menjadi set id model."""
+    """Ubah payload katalog tiap provider menjadi set id model."""
     if isinstance(payload, dict):
-        rows = payload.get("data") or payload.get("models") or []
+        rows = payload.get("data") or payload.get("models") or payload.get("result") or []
     else:
         rows = payload or []
     ids: set[str] = set()
     for row in rows:
         if not isinstance(row, dict):
             continue
-        mid = row.get("id") or row.get("model") or ""
+        # Groq/OpenRouter/Aion memakai "id"; Cloudflare memakai "name".
+        mid = row.get("id") or row.get("model") or row.get("name") or ""
         if not mid:
             continue
         ids.add(mid)
@@ -427,8 +502,10 @@ def _normalise_ids(payload, provider: str) -> set[str]:
 def probe(provider: str, use_cache: bool = True) -> dict:
     """Cek katalog live sebuah provider.
 
-    Mengembalikan {"ok", "checked_at", "ids", "live", "dead", "error"}.
+    Mengembalikan {"ok", "checked_at", "ids", "live", "dead", "error", "skipped"}.
     `live`/`dead` dihitung dari katalog lokal MODELS milik provider itu.
+    Provider non-chat (gambar/pencarian) tidak selalu punya katalog publik, jadi
+    ditandai `skipped` dan katalog lokalnya dianggap berlaku.
     """
     from .state import load_cache, save_cache  # import lokal: hindari siklus
 
@@ -442,7 +519,9 @@ def probe(provider: str, use_cache: bool = True) -> dict:
     key = get_key(provider)
     result: dict = {
         "provider": provider,
+        "kind": provider_kind(provider),
         "ok": False,
+        "skipped": False,
         "checked_at": time.time(),
         "ids": [],
         "live": [],
@@ -450,15 +529,49 @@ def probe(provider: str, use_cache: bool = True) -> dict:
         "key_present": bool(key),
         "error": "",
     }
+
+    mine = models_for(provider)
+    models_url = str(meta.get("models_url") or "")
+
+    # Provider tanpa katalog publik: jangan menembak endpoint kosong.
+    if not models_url:
+        result["skipped"] = True
+        result["error"] = "Katalog live tidak tersedia untuk provider ini."
+        result["live"] = sorted(mine)
+        save_cache(cache_key, result, ttl=CACHE_TTL)
+        return result
+
+    # Katalog Cloudflare butuh account id; cari otomatis bila tidak diisi.
+    if "{account_id}" in models_url:
+        account_id = get_account_id()
+        if not account_id and key:
+            try:
+                from .imageai import resolve_account_id  # import lokal: hindari siklus
+
+                account_id = resolve_account_id(use_cache=use_cache)
+            except Exception as exc:  # pragma: no cover - bergantung jaringan
+                result["error"] = f"Account id Cloudflare tidak ditemukan: {exc}"
+        if not account_id:
+            result["skipped"] = True
+            result["error"] = result["error"] or (
+                "CLOUDFLARE_ACCOUNT_ID belum diisi dan tidak bisa ditemukan otomatis."
+            )
+            result["live"] = sorted(mine)
+            save_cache(cache_key, result, ttl=CACHE_TTL)
+            return result
+        models_url = models_url.replace("{account_id}", account_id)
+    else:
+        models_url = models_url.replace("{account_id}", "")
+
     try:
-        payload = _fetch_json(meta["models_url"], key=key)
+        payload = _fetch_json(models_url, key=key)
         ids = _normalise_ids(payload, provider)
         result["ids"] = sorted(ids)
         result["ok"] = True
+        result["error"] = ""
     except Exception as exc:  # pragma: no cover - bergantung jaringan
         result["error"] = f"{type(exc).__name__}: {exc}"
 
-    mine = models_for(provider)
     if result["ok"] and result["ids"]:
         live_ids = set(result["ids"])
         for mid in mine:

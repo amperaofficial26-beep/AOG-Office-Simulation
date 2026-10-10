@@ -57,6 +57,14 @@ ROLE_PLAYBOOKS: dict[str, tuple[str, ...]] = {
         "nyatakan asumsi dengan jujur dan kerjakan bagian yang dapat dipastikan",
         "minta keputusan hanya untuk hal yang benar-benar ambigu atau berisiko",
     ),
+    "image_artist": (
+        "tuliskan prompt akhir yang benar-benar dikirim ke model agar aset bisa diulang",
+        "sebutkan nama berkas, model, dan langkah render; jangan mengklaim aset yang belum dirender",
+    ),
+    "web_search": (
+        "hanya mengutip sumber yang benar-benar ada di hasil pencarian beserta URL-nya",
+        "pisahkan temuan bersumber dari tafsir sendiri dan sebutkan tanggal terbit bila ada",
+    ),
 }
 
 DELIVERABLE_CONTRACTS: dict[str, tuple[str, ...]] = {
@@ -71,6 +79,14 @@ DELIVERABLE_CONTRACTS: dict[str, tuple[str, ...]] = {
     "riset": (
         "sertakan temuan, bukti/sumber yang benar-benar tersedia, keterbatasan, dan rekomendasi",
         "jangan membuat URL, kutipan, angka, atau tanggal yang tidak ada di konteks",
+    ),
+    "riset web": (
+        "cantumkan kueri yang dipakai, jumlah sumber, dan tautan asli tiap sumber",
+        "tandai klaim yang belum dikonfirmasi lebih dari satu sumber",
+    ),
+    "gambar": (
+        "tampilkan prompt akhir, model, jumlah langkah, dan nama berkas hasil render",
+        "jelaskan asumsi komposisi atau gaya yang dipilih bila brief tidak menyebutkannya",
     ),
     "artikel": (
         "berikan artikel final dengan judul, pembuka, isi terstruktur, dan penutup",
@@ -188,6 +204,24 @@ def evaluate_response(text: str, deliverable: str, brief: str = "") -> dict[str,
                 if keyword not in lower and (keyword != "verifikasi" or "health check" not in lower):
                     score -= 10
                     issues.append(message)
+        elif deliverable == "riset web":
+            if not re.search(r"https?://\S+", value):
+                score -= 30
+                issues.append("Tidak ada tautan sumber yang dapat diverifikasi.")
+            else:
+                strengths.append("Sumber dicantumkan dengan tautan asli.")
+            if not re.search(r"\bkueri\b", lower):
+                score -= 8
+                issues.append("Kueri pencarian yang dipakai belum dicatat.")
+        elif deliverable == "gambar":
+            if "prompt" not in lower:
+                score -= 20
+                issues.append("Prompt akhir yang dikirim ke model tidak dicantumkan.")
+            else:
+                strengths.append("Prompt final tersimpan sehingga aset bisa diulang.")
+            if not re.search(r"\.(png|jpe?g|webp)\b", lower):
+                score -= 10
+                issues.append("Nama berkas hasil render belum disebutkan.")
         elif deliverable == "balasan pesan":
             if len(words) > 700:
                 score -= 10
@@ -223,6 +257,8 @@ def recommended_max_tokens(deliverable: str, priority: str = "normal") -> int:
         "konten": 900,
         "desain": 1400,
         "riset": 1800,
+        "riset web": 1800,
+        "gambar": 700,
         "laporan": 1800,
         "artikel": 1800,
         "kode": 2200,

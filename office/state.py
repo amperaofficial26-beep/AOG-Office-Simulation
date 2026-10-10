@@ -220,6 +220,8 @@ def migrate_state(state: dict[str, Any]) -> dict[str, Any]:
         task.setdefault("quality_score", 0)
         task.setdefault("attempt_count", 0)
         task.setdefault("previous_result", "")
+        task.setdefault("files", [])
+        task.setdefault("sources", [])
         clean_tasks.append(task)
     base["tasks"] = clean_tasks
     base["schema"] = _SCHEMA_VERSION

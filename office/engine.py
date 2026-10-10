@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import random
+import re
 import time
 from typing import Any
 
-from . import llm
+from . import imageai, llm, websearch
 from .config import DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
-from .models import ROLE_FALLBACK, model_label, provider_of
+from .models import ROLE_FALLBACK, modality_of, model_label, provider_of
 from .models_data import (
     EMP_COFFEE,
     EMP_GAMING,
@@ -36,6 +37,16 @@ BREAK_DURATION = 45.0  # detik sebelum karyawan kembali ke mejanya
 VALID_PRIORITIES = {"rendah", "normal", "tinggi"}
 PRIORITY_ORDER = {"tinggi": 0, "normal": 1, "rendah": 2}
 RUNNABLE_STATES = {TASK_QUEUED, TASK_FAILED, TASK_REJECTED}
+
+# Kegagalan kerja dari tiga jenis keluaran: teks, gambar, dan pencarian web.
+WORK_ERRORS = (llm.LLMError, imageai.ImageError, websearch.SearchError)
+
+
+def _previous_prompt(task: dict[str, Any]) -> str:
+    """Ambil prompt gambar versi sebelumnya agar revisi tidak mulai dari nol."""
+    previous = str(task.get("previous_result") or "")
+    match = re.search(r"```text\n(.*?)```", previous, re.DOTALL)
+    return match.group(1).strip() if match else ""
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -149,39 +160,83 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
     task["progress"] = 0.15
     save_state(state)
 
-    messages = [
-        {
-            "role": "system",
-            "content": llm.build_system_prompt(emp, cfg.get("company", "perusahaan"), cfg.get("boss_name", "Bos")),
-        },
-        {
-            "role": "user",
-            "content": llm.build_task_prompt(
+    task["progress"] = 0.55
+    save_state(state)
+
+    model_id = task.get("model_used") or emp.get("model", "")
+    kind = modality_of(model_id)
+    revising = bool(task.get("revision_count"))
+    try:
+        if kind == "image":
+            # Karyawan Ruang AI Image: keluarannya berkas PNG, bukan teks.
+            prompt = imageai.build_image_prompt(
                 title=task["title"],
                 brief=task["brief"],
                 deliverable=task["deliverable"],
-                priority=task["priority"],
-                context=task.get("repo_context", ""),
-                revision_note=task.get("boss_note", "") if task.get("revision_count") else "",
-                history=task.get("history", []),
-                role=emp.get("role", ""),
-                previous_result=task.get("previous_result", "") if task.get("revision_count") else "",
-            ),
-        },
-    ]
-
-    task["progress"] = 0.55
-    save_state(state)
-    try:
-        result, notes = llm.chat_with_fallback(
-            messages,
-            model=task.get("model_used") or emp.get("model", ""),
-            fallbacks=[m for m in (emp.get("fallbacks") or [])],
-            role_fallbacks=ROLE_FALLBACK.get(emp.get("role", ""), []),
-            temperature=DEFAULT_TEMPERATURE,
-            max_tokens=max(DEFAULT_MAX_TOKENS, recommended_max_tokens(task["deliverable"], task["priority"])),
-        )
-    except llm.LLMError as exc:
+                revision_note=task.get("boss_note", "") if revising else "",
+                previous_prompt=_previous_prompt(task),
+            )
+            result, notes = imageai.generate_with_fallback(
+                prompt,
+                model=model_id,
+                fallbacks=[m for m in (emp.get("fallbacks") or [])],
+                role_fallbacks=ROLE_FALLBACK.get(emp.get("role", ""), []),
+                slug=str(task.get("tid", "gambar")),
+            )
+            task["result"] = clean_response(
+                imageai.build_report(result, task["title"], task["deliverable"])
+            )
+            task["files"] = [str(f) for f in (result.get("files") or []) if f]
+            task["sources"] = []
+        elif kind == "search":
+            # Karyawan Ruang Web Research: keluarannya laporan bersumber.
+            query = websearch.build_query(task["title"], task["brief"])
+            result, notes = websearch.search_with_fallback(
+                query,
+                model=model_id,
+                fallbacks=[m for m in (emp.get("fallbacks") or [])],
+                role_fallbacks=ROLE_FALLBACK.get(emp.get("role", ""), []),
+            )
+            task["result"] = clean_response(
+                websearch.build_report(result, task["title"], task["deliverable"])
+            )
+            task["sources"] = result.sources
+        else:
+            messages = [
+                {
+                    "role": "system",
+                    "content": llm.build_system_prompt(
+                        emp, cfg.get("company", "perusahaan"), cfg.get("boss_name", "Bos")
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": llm.build_task_prompt(
+                        title=task["title"],
+                        brief=task["brief"],
+                        deliverable=task["deliverable"],
+                        priority=task["priority"],
+                        context=task.get("repo_context", ""),
+                        revision_note=task.get("boss_note", "") if revising else "",
+                        history=task.get("history", []),
+                        role=emp.get("role", ""),
+                        previous_result=task.get("previous_result", "") if revising else "",
+                    ),
+                },
+            ]
+            result, notes = llm.chat_with_fallback(
+                messages,
+                model=model_id,
+                fallbacks=[m for m in (emp.get("fallbacks") or [])],
+                role_fallbacks=ROLE_FALLBACK.get(emp.get("role", ""), []),
+                temperature=DEFAULT_TEMPERATURE,
+                max_tokens=max(
+                    DEFAULT_MAX_TOKENS,
+                    recommended_max_tokens(task["deliverable"], task["priority"]),
+                ),
+            )
+            task["result"] = clean_response(result.text)
+    except WORK_ERRORS as exc:
         task["status"] = TASK_FAILED
         task["error"] = str(exc)
         task["finished_at"] = now()
@@ -195,7 +250,6 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
         return state, task
 
     _stats(state, "api_calls")
-    task["result"] = clean_response(result.text)
     task["quality"] = evaluate_response(task["result"], task["deliverable"], task["brief"])
     task["quality_score"] = task["quality"]["score"]
     task["attempt_count"] = int(task.get("attempt_count", 0)) + 1

@@ -80,9 +80,12 @@ def test_is_retired():
 def test_models_for_memfilter_per_provider():
     groq = models.models_for("groq")
     assert groq and all(m["provider"] == "groq" for m in groq.values())
-    assert set(groq) | set(models.models_for("openrouter")) | set(models.models_for("aion")) == set(
-        models.MODELS
-    )
+    gabungan: set[str] = set()
+    for provider in PROVIDERS:
+        punya = models.models_for(provider)
+        assert all(m["provider"] == provider for m in punya.values())
+        gabungan |= set(punya)
+    assert gabungan == set(models.MODELS), "ada model yang tidak tercakup provider mana pun"
 
 
 def test_model_label_dan_provider_of():
@@ -90,6 +93,68 @@ def test_model_label_dan_provider_of():
     assert models.model_label("model-ngawur") == "model-ngawur"
     assert models.provider_of("aion-labs/aion-3.5") == "aion"
     assert models.provider_of("model-ngawur") == ""
+
+
+# ----------------------------------------------------------------------------- jenis keluaran
+def test_modality_model_chat_gambar_dan_pencarian():
+    assert models.modality_of("openai/gpt-oss-120b") == "chat"
+    assert models.modality_of("@cf/black-forest-labs/flux-1-schnell") == "image"
+    assert models.modality_of("tavily-search") == "search"
+    assert models.modality_of("model-ngawur") == "chat"
+
+
+def test_models_for_kind_memisahkan_katalog():
+    gambar = models.models_for_kind("image")
+    cari = models.models_for_kind("search")
+    assert gambar and all(m["provider"] == "cloudflare" for m in gambar.values())
+    assert cari and all(m["provider"] == "tavily" for m in cari.values())
+    assert not set(gambar) & set(cari)
+    assert set(models.models_for_kind("chat")) | set(gambar) | set(cari) == set(models.MODELS)
+
+
+def test_provider_baru_punya_katalog_dan_fallback_role():
+    assert models.models_for("cloudflare"), "Cloudflare belum punya model di katalog"
+    assert models.models_for("tavily"), "Tavily belum punya model di katalog"
+    for role in ("image_artist", "web_search"):
+        assert models.ROLE_FALLBACK[role], f"role {role} tidak punya rantai fallback"
+        for mid in models.ROLE_FALLBACK[role]:
+            assert mid in models.MODELS
+
+
+def test_probe_provider_tanpa_katalog_publik_dilewati(monkeypatch):
+    def tidak_dipanggil(*a, **k):  # pragma: no cover - harus dilewati
+        raise AssertionError("provider tanpa katalog tidak boleh menembak jaringan")
+
+    monkeypatch.setattr(models, "_fetch_json", tidak_dipanggil)
+    res = models.probe("tavily", use_cache=False)
+    assert res["skipped"] and not res["ok"]
+    assert res["live"] == sorted(models.models_for("tavily"))
+    assert res["dead"] == []
+
+
+def test_probe_cloudflare_tanpa_kunci_dilewati(monkeypatch):
+    monkeypatch.setattr(models, "get_key", lambda provider: "")
+    monkeypatch.setattr(models, "get_account_id", lambda: "")
+    res = models.probe("cloudflare", use_cache=False)
+    assert res["skipped"]
+    assert "CLOUDFLARE_ACCOUNT_ID" in res["error"]
+    assert res["live"] == sorted(models.models_for("cloudflare"))
+
+
+def test_probe_cloudflare_memakai_katalog_live(monkeypatch):
+    monkeypatch.setattr(models, "get_key", lambda provider: "cf-token")
+    monkeypatch.setattr(models, "get_account_id", lambda: "akun-123")
+    dilihat = []
+
+    def katalog(url, key="", timeout=20):
+        dilihat.append(url)
+        return {"result": [{"name": "@cf/black-forest-labs/flux-1-schnell"}]}
+
+    monkeypatch.setattr(models, "_fetch_json", katalog)
+    res = models.probe("cloudflare", use_cache=False)
+    assert res["ok"] and "@cf/black-forest-labs/flux-1-schnell" in res["live"]
+    assert "@cf/black-forest-labs/flux-1-dev" in res["dead"]
+    assert "/accounts/akun-123/ai/models/search" in dilihat[0]
 
 
 def test_normalise_ids_groq_dan_openrouter():

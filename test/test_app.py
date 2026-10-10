@@ -127,3 +127,34 @@ def test_pengaturan_form_kunci_ada(app):
     placeholders = [ti for ti in app.text_input]
     assert any("GITHUB_TOKEN" in (p.label or "") for p in placeholders)
     assert any("GROQ_API_KEY" in (p.label or "") for p in placeholders)
+
+
+def test_pengaturan_form_kunci_gambar_dan_pencarian(app):
+    """Panel Pengaturan harus menyediakan kolom kunci FLUX.1 dan Tavily."""
+    buka(app, "settings")
+    labels = [str(ti.label or "") for ti in app.text_input]
+    assert any("CLOUDFLARE_API_KEY" in label for label in labels)
+    assert any("CLOUDFLARE_ACCOUNT_ID" in label for label in labels)
+    assert any("TAVILY_API_KEY" in label for label in labels)
+    assert not app.exception, app.exception
+
+
+def test_panel_model_memuat_provider_gambar_dan_pencarian(app):
+    buka(app, "models")
+    mds = " ".join(md.value for md in app.markdown)
+    assert "Cloudflare Workers AI" in mds
+    assert "Tavily" in mds
+    assert "FLUX" in mds or "flux" in mds
+    providers = [str(sb.label or "") for sb in app.selectbox]
+    assert providers, "panel model tidak punya pemilih provider"
+    assert not app.exception, app.exception
+
+
+def test_bentuk_keluaran_baru_ada_di_form_tugas(app):
+    buka(app, "tugas")
+    opsi = []
+    for sb in app.selectbox:
+        if sb.label == "Bentuk keluaran":
+            opsi = [str(o) for o in sb.options]
+    assert "gambar" in opsi, "bentuk keluaran 'gambar' hilang"
+    assert "riset web" in opsi, "bentuk keluaran 'riset web' hilang"
