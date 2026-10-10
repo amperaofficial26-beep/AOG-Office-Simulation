@@ -28,7 +28,7 @@ def app(tmp_path, monkeypatch):
 
 
 def buka(app, slug: str):
-    tombol = next((b for b in app.button if b.key == f"tb_{slug}"), None)
+    tombol = next((b for b in app.button if b.key == f"fb_{slug}"), None)
     assert tombol is not None, f"tombol HUD {slug} tidak ditemukan"
     tombol.click().run()
     return app
@@ -53,9 +53,9 @@ def test_css_hud_dimuat(app):
     assert "rotate(90deg)" in style[0], "aturan rotasi landscape untuk ponsel tidak ada"
 
 
-def test_bar_atas_memuat_semua_fitur(app):
+def test_bar_bawah_memuat_semua_fitur(app):
     for slug in TOPBAR_SLUGS:
-        assert any(b.key == f"tb_{slug}" for b in app.button), f"tb_{slug} hilang"
+        assert any(b.key == f"fb_{slug}" for b in app.button), f"fb_{slug} hilang"
 
 
 def test_bar_bawah_memuat_semua_ruang(app):
