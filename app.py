@@ -126,11 +126,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-te
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"],
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="column"] {
-  width: 48px !important; min-width: 48px; flex: 0 0 48px !important;
-  display: flex; justify-content: center;
-}
-div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
-  align-items: center !important;
+  width: auto !important; min-width: 44px; flex: 0 0 auto !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
   position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
@@ -334,13 +330,14 @@ def top_bar() -> None:
 def bottom_bar() -> None:
     """Semua tombol fitur ada di bawah: fitur dulu, lalu tombol ruang."""
     summ = engine.summary(S())
-    st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
     fitur = [("fitur", slug, icon_name, judul) for slug, icon_name, judul in TOPBAR]
     ruang = [("ruang", rid, ROOMS[rid].icon, ROOMS[rid].name) for rid in ROOM_ORDER]
     semua = fitur + ruang
     cols = st.columns(len(semua), gap="small", vertical_alignment="center")
     for i, (col, (jenis, kunci, icon_name, judul)) in enumerate(zip(cols, semua)):
         with col:
+            if i == 0:
+                st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
             if jenis == "fitur":
                 badge = ""
                 if kunci == "approval" and summ["pending"]:
