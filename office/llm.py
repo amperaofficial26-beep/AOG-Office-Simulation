@@ -83,18 +83,45 @@ def _post(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[st
         raise LLMError(f"Balasan bukan JSON: {raw[:200]}") from exc
 
 
+
 def _extract_text(payload: dict[str, Any]) -> str:
+    """Ambil konten jawaban, bukan kanal penalaran internal."""
     choices = payload.get("choices") or []
     if not choices:
         return ""
-    msg = choices[0].get("message") or {}
-    text = msg.get("content")
-    if isinstance(text, list):  # beberapa provider memisah reasoning/content
-        parts = [p.get("text", "") for p in text if isinstance(p, dict)]
-        text = "\n".join(p for p in parts if p)
-    if not text and msg.get("reasoning"):
-        text = str(msg["reasoning"])
-    return (text or "").strip()
+
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+
+    # Format respons berupa teks biasa.
+    if isinstance(content, str):
+        return content.strip()
+
+    # Format respons berupa daftar blok konten.
+    if isinstance(content, list):
+        answer_parts = []
+
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+
+            # Lewati blok yang secara eksplisit bukan teks jawaban.
+            if part.get("type") not in (None, "text", "output_text"):
+                continue
+
+            # Jangan ambil blok yang ditandai sebagai reasoning.
+            if part.get("channel") == "reasoning":
+                continue
+
+            text = part.get("text")
+            if isinstance(text, str) and text.strip():
+                answer_parts.append(text.strip())
+
+        return "\n".join(answer_parts).strip()
+
+    # Jangan gunakan message["reasoning"] sebagai jawaban cadangan.
+    return ""
+
 
 
 def _usage(payload: dict[str, Any]) -> tuple[int, int]:
