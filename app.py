@@ -66,7 +66,7 @@ TOPBAR = [
     ("inbox", "mark_chat_unread", "Kotak Pesan"),
     ("approval", "approval", "Persetujuan"),
     ("karyawan", "diversity_3", "Karyawan"),
-    ("github", "github", "GitHub"),
+    ("github", "source", "GitHub"),
     ("apps", "rocket_launch", "Aplikasi Streamlit"),
     ("models", "hub", "Model & Provider"),
     ("settings", "settings", "Pengaturan"),
@@ -118,8 +118,8 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
   position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
   width: fit-content; max-width: calc(100vw - 16px);
-  background: #15151D; border-radius: 10px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
-  padding: 26px 12px 8px !important; overflow-x: auto; scrollbar-width: none;
+  background: #15151D; border-radius: 50px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
+  padding: 26px 16px 10px !important; overflow-x: auto; scrollbar-width: none;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
   flex-wrap: nowrap !important; width: max-content; gap: 6px !important;
@@ -179,6 +179,9 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) .stButton butt
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
   width: 40px; height: 40px; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"]:first-child [data-testid="stVerticalBlock"] > div:first-child {
+  display: none !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
   width: 44px; height: 44px; border-radius: 50%; background: transparent;
@@ -328,44 +331,28 @@ def top_bar() -> None:
 
 
 def bottom_bar() -> None:
-    """Semua tombol fitur ada di bawah: fitur dulu, lalu tombol ruang."""
+    """Semua tombol fitur ada di bawah, sejajar dalam satu pil."""
     summ = engine.summary(S())
-    fitur = [("fitur", slug, icon_name, judul) for slug, icon_name, judul in TOPBAR]
-    ruang = [("ruang", rid, ROOMS[rid].icon, ROOMS[rid].name) for rid in ROOM_ORDER]
-    semua = fitur + ruang
-    cols = st.columns(len(semua), gap="small", vertical_alignment="center")
-    for i, (col, (jenis, kunci, icon_name, judul)) in enumerate(zip(cols, semua)):
+    cols = st.columns(len(TOPBAR), gap="small", vertical_alignment="center")
+    for i, (col, (kunci, icon_name, judul)) in enumerate(zip(cols, TOPBAR)):
         with col:
             if i == 0:
                 st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
-            if jenis == "fitur":
-                badge = ""
-                if kunci == "approval" and summ["pending"]:
-                    badge = f" ({summ['pending']})"
-                if kunci == "inbox" and summ["inbox_unread"]:
-                    badge = f" ({summ['inbox_unread']})"
-                aktif = st.session_state.get("drawer") == kunci
-                if st.button(
-                    " ",
-                    key=f"fb_{kunci}",
-                    icon=mat(icon_name),
-                    help=f"{judul}{badge}",
-                    type="primary" if aktif else "secondary",
-                    use_container_width=True,
-                ):
-                    open_drawer(None if aktif else kunci)
-            else:
-                aktif = st.session_state.get("selected_room") == kunci and st.session_state.get("drawer") == "kantor"
-                if st.button(
-                    " ",
-                    key=f"bb_{kunci}",
-                    icon=mat(icon_name),
-                    help=judul,
-                    type="primary" if aktif else "secondary",
-                    use_container_width=True,
-                ):
-                    st.session_state["selected_room"] = kunci
-                    open_drawer("kantor")
+            badge = ""
+            if kunci == "approval" and summ["pending"]:
+                badge = f" ({summ['pending']})"
+            if kunci == "inbox" and summ["inbox_unread"]:
+                badge = f" ({summ['inbox_unread']})"
+            aktif = st.session_state.get("drawer") == kunci
+            if st.button(
+                " ",
+                key=f"fb_{kunci}",
+                icon=mat(icon_name),
+                help=f"{judul}{badge}",
+                type="primary" if aktif else "secondary",
+                use_container_width=True,
+            ):
+                open_drawer(None if aktif else kunci)
 
 
 def drawer() -> None:
