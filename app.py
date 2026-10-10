@@ -603,7 +603,8 @@ def panel_tugas() -> None:
         c1, c2, c3 = st.columns([2, 1, 1])
         default_emp = suggested_employee(deliverable)
         emp_idx = ids.index(default_emp) if default_emp in ids else 0
-        chosen = c1.selectbox("Karyawan", labels, index=emp_idx)
+        label_by_id = dict(zip(ids, labels))
+        chosen = c1.selectbox("Karyawan", options=ids, index=emp_idx, format_func=lambda eid: label_by_id.get(eid, eid), key="task_assignee",)
         priority = c2.selectbox("Prioritas", PRIORITIES, index=1)
         room_choice = c3.selectbox("Ruang", ["(ikut karyawan)"] + [ROOMS[r].name for r in ROOM_ORDER], index=0)
         use_repo = st.checkbox("Sertakan konteks repo GitHub", value=bool(get_key("github")))
@@ -620,7 +621,7 @@ def panel_tugas() -> None:
         if not title or not brief:
             st.warning("Judul dan brief wajib diisi.")
         else:
-            eid = eid_from_label(ids, labels, chosen, emp_idx)
+            eid = chosen
             room_map = {ROOMS[r].name: r for r in ROOM_ORDER}
             room_id = room_map.get(room_choice, "")
             context = ""
