@@ -114,14 +114,22 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
   padding: 6px 10px !important;
 }
+/* bar bawah ala "liquid navigation": pil gelap melayang di tengah */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(10px); border-top: 1px solid var(--line);
-  padding: 6px 10px !important; overflow-x: auto;
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
+  width: fit-content; max-width: calc(100vw - 16px);
+  background: #15151D; border-radius: 10px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
+  padding: 8px 10px !important; overflow-x: auto; scrollbar-width: none;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap !important; width: max-content; gap: 6px !important;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"],
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="column"] {
+  width: auto !important; min-width: 44px; flex: 0 0 auto !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
-  position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
+  position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
   width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
@@ -149,7 +157,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) [data-test
     padding: 6px 10px !important; overflow-x: auto;
   }
   div[data-testid="stMainBlockContainer"] > div > div:nth-child(6) {
-    position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
+    position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
     width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
@@ -172,6 +180,18 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton b
   width: 40px; height: 40px; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
 }
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
+  width: 44px; height: 44px; border-radius: 50%; background: transparent;
+  border: none; box-shadow: none; color: #FFFFFF;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button:hover {
+  background: rgba(255,255,255,.12); color: #FFFFFF; border: none;
+}
+/* item aktif: lingkaran putih seperti gelembung cair */
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[kind="primary"],
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[data-testid="stBaseButton-primary"] {
+  background: #FFFFFF; color: #15151D; border: none;
+}
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) p,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin: 0; }
 .hud-bottom { height: 0; }
@@ -186,7 +206,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin:
 @media (max-width: 720px) {
   div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) { top: 50px; bottom: 54px; }
   div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) .stButton button,
-  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button { width: 34px; height: 34px; }
+  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button { width: 40px; height: 40px; }
   .brand-line .tiny { display: none; }
 }
 
