@@ -168,6 +168,7 @@ def build_system_prompt(
     )
 
 
+
 def build_task_prompt(
     title: str,
     brief: str,
@@ -179,21 +180,52 @@ def build_task_prompt(
 ) -> str:
     parts = [
         f"TUGAS: {title}",
-        f"BENTUK KELUARAN: {deliverable}",
+        f"BENTUK KELUARAN YANG DIMINTA: {deliverable}",
         f"PRIORITAS: {priority}",
         "",
         "BRIEF DARI BOS:",
         brief.strip() or "(tidak ada detail tambahan)",
+        "",
+        "ATURAN PENYELESAIAN:",
+        "- Kerjakan inti tugas secara langsung dan berikan hasil akhirnya.",
+        "- Jangan tampilkan analisis internal, proses berpikir, atau langkah penalaran.",
+        "- Jangan menulis pengantar yang menjelaskan bagaimana Anda menganalisis tugas.",
+        "- Sesuaikan bentuk jawaban dengan kebutuhan tugas.",
+        "- Jika tugas meminta kode, berikan kode yang relevan dan siap digunakan.",
+        "- Jika tugas tidak membutuhkan kode, jangan membuat kode hanya karena "
+        "konteks proyek menggunakan Python.",
+        "- Jangan mengarang sumber, hasil pemeriksaan, atau pekerjaan yang belum dilakukan.",
+        "- Akhiri dengan bagian 'Ringkasan untuk Bos' maksimal 3 poin.",
     ]
+
     if context:
-        parts += ["", "KONTEKS PROYEK (potongan repo/aplikasi):", context[:MAX_CONTEXT_CHARS]]
+        parts += [
+            "",
+            "KONTEKS PROYEK (gunakan hanya jika relevan):",
+            context[:MAX_CONTEXT_CHARS],
+        ]
+
     if history:
-        parts += ["", "RIWAYAT PENGERJAAN SEBELUMNYA:"]
+        parts += ["", "RIWAYAT PENGERJAAN SEBELUMNYA (jika relevan):"]
         for item in list(history)[-2:]:
-            parts.append(f"- {item.get('status', '?')}: {str(item.get('text', ''))[:600]}")
+            parts.append(
+                f"- {item.get('status', '?')}: "
+                f"{str(item.get('text', ''))[:600]}"
+            )
+
     if revision_note:
-        parts += ["", "CATATAN REVISI DARI BOS:", revision_note.strip()]
-    parts += ["", "Kerjakan sekarang dan serahkan hasil akhirnya."]
+        parts += [
+            "",
+            "CATATAN REVISI DARI BOS:",
+            revision_note.strip(),
+        ]
+
+    parts += [
+        "",
+        "PENTING: Berikan hanya hasil akhir yang ditujukan kepada Bos. "
+        "Jangan tampilkan catatan analisis atau proses berpikir.",
+    ]
+
     return "\n".join(parts)
 
 
