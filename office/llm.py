@@ -170,7 +170,9 @@ def build_task_prompt(
     return "\n".join(parts)
 
 
-# ----------------------------------------------------------------------------- panggilan
+
+# -----------------------------------------------------------------------------
+# panggilan
 def chat(
     messages: list[dict[str, str]],
     model: str,
@@ -180,34 +182,68 @@ def chat(
     json_mode: bool = False,
 ) -> LLMResult:
     """Satu panggilan chat ke model tertentu. Tanpa fallback."""
-    provider = provider or provider_of(model) or MODELS.get(model, {}).get("provider")
-    if not provider:
-        # model tak dikenal: tebak dari awalan
-        provider = "aion" if model.startswith("aion") else "groq"
+
+    # 1. Pastikan model terdaftar di katalog.
+    model_meta = MODELS.get(model)
+    if model_meta is None:
+        raise LLMError(
+            f"Model '{model}' tidak terdaftar di katalog AOG Office Simulation."
+        )
+
+    # 2. Ambil provider resmi model dan cegah ketidakcocokan.
+    known_provider = model_meta.get("provider", "")
+    if provider and provider != known_provider:
+        raise LLMError(
+            f"Provider tidak cocok untuk model '{model}': "
+            f"diminta '{provider}', seharusnya '{known_provider}'."
+        )
+
+    provider = provider or known_provider
+
+    # 3. Pastikan provider memiliki konfigurasi.
+    if not provider or provider not in PROVIDERS:
+        raise LLMError(
+            f"Provider '{provider}' tidak terdaftar dalam konfigurasi."
+        )
+
+    # 4. Siapkan endpoint dan payload permintaan.
     url, label = _endpoint(provider)
+
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+
+    # 5. Kirim permintaan ke provider.
     data = _post(url, _headers(provider), payload)
-    text = _extract_text(data)
-    if not text:
-        raise LLMError(f"{label} membalas kosong untuk model {model}")
-    tin, tout = _usage(data)
+
+    # 6. Periksa apakah provider mengembalikan teks.
+    response_text = _extract_text(data)
+    if not response_text:
+        raise LLMError(
+            f"{label} membalas kosong untuk model '{model}'."
+        )
+
+    # 7. Ambil informasi penggunaan token.
+    tokens_in, tokens_out = _usage(data)
+
+    # 8. Kembalikan hasil beserta identitas model dan provider.
     return LLMResult(
-        text=text,
+        text=response_text,
         model=model,
         model_label=model_label(model),
         provider=provider,
         provider_label=label,
-        tokens_in=tin,
-        tokens_out=tout,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
         latency=0.0,
     )
+
 
 
 def chat_with_fallback(
