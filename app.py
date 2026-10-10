@@ -15,7 +15,7 @@ from typing import Any
 import streamlit as st
 
 from office import apps as apps_mod
-from office import engine, github as gh
+from office import engine, github as gh, watchdog
 from office.config import (
     APP_NAME,
     PROVIDERS,
@@ -1013,6 +1013,46 @@ def panel_apps() -> None:
         st.rerun()
     if b2.button("Simpan perubahan", icon=mat("save"), use_container_width=True):
         toast("Daftar aplikasi disimpan", "save")
+    panel_pengawas()
+
+
+def panel_pengawas() -> None:
+    """Pengawas otomatis: cek berkala lalu reboot aplikasi yang mati/tidur lewat GitHub."""
+    snap = watchdog.snapshot()
+    cfg = snap["settings"]
+    st.markdown(section("Pengawas otomatis", "monitor_heart", "Mengecek tiap aplikasi dan me-reboot yang mati atau tidur."), unsafe_allow_html=True)
+    if not snap["token"]:
+        st.warning("GITHUB_TOKEN belum ada di Secrets. Pengawas tetap mengecek, tetapi tidak bisa me-reboot.")
+    last = snap["last_cycle"]
+    last_txt = time.strftime("%d %b %Y %H:%M:%S", time.localtime(last)) if last else "belum pernah"
+    running = "berjalan" if snap["thread_alive"] else "belum berjalan"
+    st.caption(f"Pengawas {running} · interval {cfg['interval_min']} menit · siklus terakhir: {last_txt}")
+    enabled = st.toggle("Pengawas aktif", value=bool(cfg.get("enabled")), key="watchdog_enabled")
+    if enabled != bool(cfg.get("enabled")):
+        watchdog.set_enabled(enabled)
+        st.rerun()
+    rows = snap["apps"]
+    for url, rec in rows.items():
+        tone = "ok" if rec.get("status") == "hidup" else ("warn" if rec.get("status") == "tidur" else "bad")
+        last_reboot = rec.get("last_reboot_at", 0)
+        reboot_txt = time.strftime("%H:%M", time.localtime(last_reboot)) if last_reboot else "-"
+        st.markdown(
+            f'<div class="card soft"><div class="row between"><b>{rec.get("name", url)}</b>'
+            f'{chip(rec.get("status", "belum dicek"), tone, "language", 12)}</div>'
+            f'<div class="tiny mono">{rec.get("repo", "-")} · gagal berturut-turut: {rec.get("fail_streak", 0)} · '
+            f'reboot hari ini: {rec.get("reboots_today", 0)} · reboot terakhir: {reboot_txt}</div></div>',
+            unsafe_allow_html=True,
+        )
+    if snap["events"]:
+        with st.expander("Catatan pengawas", expanded=False):
+            for ev in snap["events"]:
+                when = time.strftime("%d %b %H:%M:%S", time.localtime(ev["ts"]))
+                st.markdown(f'<div class="tiny mono">{when} · {ev["app"]} · {ev["message"]}</div>', unsafe_allow_html=True)
+    if st.button("Cek & reboot sekarang", icon=mat("restart_alt"), use_container_width=True, key="watchdog_now"):
+        with st.spinner("Pengawas memeriksa dan me-reboot aplikasi yang bermasalah..."):
+            watchdog.run_cycle(force=True)
+        toast("Pengawasan selesai", "monitor_heart")
+        st.rerun()
 
 
 # ----------------------------------------------------------------------------- model & provider
@@ -1145,6 +1185,7 @@ def panel_settings() -> None:
 
 # ----------------------------------------------------------------------------- kerangka
 def main() -> None:
+    watchdog.ensure_running()  # pengawas latar belakang (idempoten)
     css()                      # anak 1-2 (dua blok <style>, disembunyikan CSS)
     stage()                    # anak 3: panggung full-screen (denah SVG + 3D)
     top_bar()                  # anak 4: bar atas

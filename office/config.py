@@ -149,6 +149,15 @@ SECRETS_FILE = os.path.join(ROOT_DIR, ".streamlit", "secrets.toml")
 STATE_FILE = os.path.join(DATA_DIR, "office_state.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 EXPORT_DIR = os.path.join(DATA_DIR, "exports")
+WATCHDOG_FILE = os.path.join(DATA_DIR, "watchdog.json")
+GITHUB_API = "https://api.github.com"
+
+# URL deploy Streamlit Community Cloud milik bos, dikunci per nama repo.
+STREAMLIT_APP_URLS = {
+    "Ampera-Web-Design": "https://ampera-web-design.streamlit.app/",
+    "Ampera-Scribe": "https://ampera-scribe.streamlit.app/",
+    "Room-Chat-Ampera-Group": "https://room-chat-ampera-group.streamlit.app/",
+}
 
 for _d in (DATA_DIR, EXPORT_DIR):
     os.makedirs(_d, exist_ok=True)

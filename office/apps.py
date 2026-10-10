@@ -10,13 +10,21 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .config import STREAMLIT_APP_URLS
 from .state import load_config, update_config
 
 CHECK_TIMEOUT = 12
 
+# Teks halaman "aplikasi tidur" milik Streamlit Community Cloud (hibernasi setelah 12 jam tanpa trafik).
+SLEEP_MARKERS = ("gone to sleep due to inactivity", "get this app back up", "app state: zzzz")
+
 
 def apps() -> list[dict[str, Any]]:
-    return list(load_config().get("streamlit_apps", []))
+    rows = [dict(r) for r in load_config().get("streamlit_apps", [])]
+    for row in rows:  # isi URL yang kosong dari daftar bawaan (berdasarkan nama repo)
+        if not str(row.get("url", "")).strip() and row.get("repo") in STREAMLIT_APP_URLS:
+            row["url"] = STREAMLIT_APP_URLS[row["repo"]]
+    return rows
 
 
 def save_apps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -80,15 +88,28 @@ def check_url(url: str) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(req, timeout=CHECK_TIMEOUT) as resp:  # noqa: S310
             code = int(resp.status)
-            body = resp.read(4096).decode("utf-8", errors="replace")
+            body = resp.read(65536).decode("utf-8", errors="replace")
         latency = int((time.time() - started) * 1000)
-        streamlit_like = "streamlit" in body.lower() or "_stcore" in body.lower() or code == 200
+        lowered = body.lower()
+        sleeping = any(marker in lowered for marker in SLEEP_MARKERS)
+        streamlit_like = "streamlit" in lowered or "_stcore" in lowered or code == 200
+        if sleeping:
+            return {
+                "ok": False,
+                "status": "tidur",
+                "code": code,
+                "latency_ms": latency,
+                "streamlit_like": streamlit_like,
+                "sleeping": True,
+                "error": "aplikasi sedang tidur (hibernasi Streamlit)",
+            }
         return {
             "ok": 200 <= code < 400,
             "status": "hidup" if 200 <= code < 400 else f"kode {code}",
             "code": code,
             "latency_ms": latency,
             "streamlit_like": streamlit_like,
+            "sleeping": False,
             "error": "",
         }
     except urllib.error.HTTPError as exc:
@@ -96,6 +117,7 @@ def check_url(url: str) -> dict[str, Any]:
             "ok": False,
             "status": f"HTTP {exc.code}",
             "code": exc.code,
+            "sleeping": False,
             "latency_ms": int((time.time() - started) * 1000),
             "error": str(exc.reason),
         }
@@ -104,6 +126,7 @@ def check_url(url: str) -> dict[str, Any]:
             "ok": False,
             "status": "tidak terjangkau",
             "code": 0,
+            "sleeping": False,
             "latency_ms": int((time.time() - started) * 1000),
             "error": f"{type(exc).__name__}: {exc}",
         }

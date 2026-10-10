@@ -22,6 +22,7 @@ from .config import (
     DEFAULT_COMPANY,
     EXPORT_DIR,
     STATE_FILE,
+    STREAMLIT_APP_URLS,
 )
 
 _CACHE: dict[str, tuple[float, Any]] = {}
@@ -106,21 +107,21 @@ def default_config() -> dict[str, Any]:
         "streamlit_apps": [
             {
                 "name": "Ampera Web Design",
-                "url": "",
+                "url": STREAMLIT_APP_URLS["Ampera-Web-Design"],
                 "repo": "Ampera-Web-Design",
                 "owner": "Karyawan Desain",
                 "status": "belum dicek",
             },
             {
                 "name": "Ampera Scribe",
-                "url": "",
+                "url": STREAMLIT_APP_URLS["Ampera-Scribe"],
                 "repo": "Ampera-Scribe",
                 "owner": "Karyawan Dokumentasi",
                 "status": "belum dicek",
             },
             {
                 "name": "Room Chat Ampera Group",
-                "url": "",
+                "url": STREAMLIT_APP_URLS["Room-Chat-Ampera-Group"],
                 "repo": "Room-Chat-Ampera-Group",
                 "owner": "Karyawan Hummas",
                 "status": "belum dicek",

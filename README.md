@@ -129,6 +129,18 @@ juga menjadi cadangan bila WebGL/komponen tidak termuat), dan panggung **3D** lo
   dengan latensi, dan tunjuk penanggung jawab karyawan.
 * **Kotak Pesan**: pesan masuk (manual / simulasi) bisa didelegasikan menjadi tugas.
 
+## Pengawas aplikasi Streamlit
+
+Pengawas berjalan otomatis di latar belakang selama aplikasi ini hidup (interval 5 menit).
+Tiga aplikasi (`ampera-web-design`, `ampera-scribe`, `room-chat-ampera-group`) dicek; bila
+mati atau tidur (hibernasi Streamlit), pengawas me-reboot-nya dengan commit kosong di branch
+default repo-nya lewat GitHub API. Push itu membuat Streamlit Community Cloud menjalankan
+ulang aplikasi. Reboot baru dilakukan setelah 2 kegagalan berturut-turut, dengan jeda 30 menit
+per aplikasi dan maksimal 6 reboot per hari. Tombol **Cek & reboot sekarang** ada di panel
+*Aplikasi Streamlit*.
+
+Token `GITHUB_TOKEN` di Secrets harus punya izin **Contents: Read and write** pada repo-repo tersebut.
+
 ## Struktur
 
 ```
@@ -142,6 +154,7 @@ office/roster.py        # denah ruang + roster karyawan
 office/state.py         # persistensi JSON + cache
 office/github.py        # REST GitHub
 office/apps.py          # registri aplikasi Streamlit
+office/watchdog.py      # pengawas: cek aplikasi + reboot otomatis via GitHub
 office/ui/              # ikon Material, karakter SVG, panggung 3D (Three.js) + denah isometrik, tema
 test/                   # pengujian otomatis (pytest)
 ```

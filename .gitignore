@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 data/office_state.json
 data/config.json
+data/watchdog.json
 data/exports/
 .streamlit/secrets.toml
 .pytest_cache/
