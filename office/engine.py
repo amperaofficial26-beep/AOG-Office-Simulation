@@ -27,11 +27,15 @@ from .models_data import (
     new_id,
     now,
 )
+from .quality import clean_response, evaluate_response, recommended_max_tokens
 from .roster import BOSS_SPOT, ROOMS, break_spot, desk_spot, employee_from_state
 from .state import load_config, load_state, save_state
 
 BREAK_STATES = [EMP_COFFEE, EMP_GAMING, EMP_NAP, EMP_IDLE]
 BREAK_DURATION = 45.0  # detik sebelum karyawan kembali ke mejanya
+VALID_PRIORITIES = {"rendah", "normal", "tinggi"}
+PRIORITY_ORDER = {"tinggi": 0, "normal": 1, "rendah": 2}
+RUNNABLE_STATES = {TASK_QUEUED, TASK_FAILED, TASK_REJECTED}
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -84,15 +88,26 @@ def create_task(
     emp = _emp(state, assignee)
     if emp is None:
         raise ValueError(f"Karyawan {assignee} tidak ditemukan")
+    title = str(title or "").strip()
+    brief = str(brief or "").strip()
+    if not title:
+        raise ValueError("Judul tugas wajib diisi")
+    if not brief:
+        raise ValueError("Brief tugas wajib diisi")
+    if priority not in VALID_PRIORITIES:
+        raise ValueError(f"Prioritas tidak valid: {priority}")
+    task_room = room or emp.get("room", "code")
+    if task_room not in ROOMS:
+        raise ValueError(f"Ruang tugas tidak valid: {task_room}")
     task = Task(
         tid=new_id("TGS"),
-        title=title.strip() or "(tanpa judul)",
-        brief=brief.strip(),
+        title=title[:180],
+        brief=brief[:20_000],
         assignee=assignee,
-        room=room or emp.get("room", "code"),
-        deliverable=deliverable,
+        room=task_room,
+        deliverable=str(deliverable or "dokumen").strip() or "dokumen",
         priority=priority,
-        repo_context=repo_context,
+        repo_context=str(repo_context or "")[:50_000],
         model_used=emp.get("model", ""),
         provider_used=emp.get("provider", provider_of(emp.get("model", ""))),
     ).to_dict()
@@ -114,6 +129,10 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
     task = get_task(state, tid)
     if task is None:
         return state, None
+    if task.get("status") not in RUNNABLE_STATES:
+        # Idempotensi: tombol ganda/rerun Streamlit tidak boleh memanggil API
+        # atau mengubah hasil yang sudah menunggu persetujuan.
+        return state, task
     emp = _emp(state, task["assignee"])
     cfg = load_config()
     if emp is None:
@@ -145,6 +164,8 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
                 context=task.get("repo_context", ""),
                 revision_note=task.get("boss_note", "") if task.get("revision_count") else "",
                 history=task.get("history", []),
+                role=emp.get("role", ""),
+                previous_result=task.get("previous_result", "") if task.get("revision_count") else "",
             ),
         },
     ]
@@ -158,7 +179,7 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
             fallbacks=[m for m in (emp.get("fallbacks") or [])],
             role_fallbacks=ROLE_FALLBACK.get(emp.get("role", ""), []),
             temperature=DEFAULT_TEMPERATURE,
-            max_tokens=DEFAULT_MAX_TOKENS,
+            max_tokens=max(DEFAULT_MAX_TOKENS, recommended_max_tokens(task["deliverable"], task["priority"])),
         )
     except llm.LLMError as exc:
         task["status"] = TASK_FAILED
@@ -174,7 +195,10 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
         return state, task
 
     _stats(state, "api_calls")
-    task["result"] = result.text
+    task["result"] = clean_response(result.text)
+    task["quality"] = evaluate_response(task["result"], task["deliverable"], task["brief"])
+    task["quality_score"] = task["quality"]["score"]
+    task["attempt_count"] = int(task.get("attempt_count", 0)) + 1
     task["model_used"] = result.model
     task["provider_used"] = result.provider
     task["tokens_in"] = int(result.get("tokens_in") or 0)
@@ -211,6 +235,30 @@ def run_task(state: dict[str, Any], tid: str) -> tuple[dict[str, Any], dict[str,
     return state, task
 
 
+def run_queue(state: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+    """Jalankan antrean secara deterministik: prioritas lalu waktu pembuatan.
+
+    Snapshot id dibuat sebelum eksekusi agar perubahan status selama loop tidak
+    membuat tugas terlewat atau terpanggil dua kali pada rerun Streamlit.
+    """
+    queue = [t for t in state.get("tasks", []) if t.get("status") == TASK_QUEUED]
+    queue.sort(
+        key=lambda t: (
+            PRIORITY_ORDER.get(t.get("priority", "normal"), 1),
+            float(t.get("created_at") or 0),
+            str(t.get("tid", "")),
+        )
+    )
+    if limit is not None:
+        queue = queue[: max(0, int(limit))]
+    completed: list[dict[str, Any]] = []
+    for tid in [t["tid"] for t in queue]:
+        _, result = run_task(state, tid)
+        if result is not None:
+            completed.append(result)
+    return completed
+
+
 def approve_task(
     state: dict[str, Any],
     tid: str,
@@ -220,6 +268,8 @@ def approve_task(
     task = get_task(state, tid)
     if task is None:
         return state, None
+    if task.get("status") != TASK_REVIEW:
+        return state, task
     emp = _emp(state, task["assignee"])
     task["status"] = TASK_APPROVED
     task["decided_at"] = now()
@@ -250,7 +300,19 @@ def reject_task(
     task = get_task(state, tid)
     if task is None:
         return state, None
+    if task.get("status") != TASK_REVIEW:
+        return state, task
     emp = _emp(state, task["assignee"])
+    task["previous_result"] = task.get("result", "")
+    task.setdefault("revision_history", []).append(
+        {
+            "at": now(),
+            "result": task.get("result", ""),
+            "quality_score": task.get("quality_score", 0),
+            "note": note.strip() or "Perbaiki hasil sebelumnya.",
+        }
+    )
+    del task["revision_history"][:-5]
     task["status"] = TASK_REJECTED
     task["decided_at"] = now()
     task["boss_note"] = note
@@ -301,7 +363,13 @@ def publish_release(
     notes: str = "",
     repo: str = "",
 ) -> dict[str, Any]:
-    chosen = [t for t in state.get("tasks", []) if t.get("tid") in set(task_ids)]
+    wanted = set(task_ids)
+    chosen = [
+        t for t in state.get("tasks", [])
+        if t.get("tid") in wanted and t.get("status") == TASK_APPROVED
+    ]
+    if not chosen:
+        raise ValueError("Paket rilis harus berisi minimal satu tugas yang sudah disetujui")
     release = {
         "rid": new_id("REL"),
         "title": title or f"Paket rilis {time.strftime('%d %b %H:%M')}",
@@ -337,6 +405,10 @@ def push_inbox(
     body: str,
     channel: str = "email",
 ) -> dict[str, Any]:
+    sender = str(sender or "Anonim").strip()[:120] or "Anonim"
+    subject = str(subject or "(tanpa subjek)").strip()[:200] or "(tanpa subjek)"
+    body = str(body or "").strip()[:20_000]
+    channel = str(channel or "email").strip()[:40] or "email"
     msg = {
         "mid": new_id("MSG"),
         "sender": sender,
@@ -373,6 +445,8 @@ def delegate_message(state: dict[str, Any], mid: str, eid: str) -> tuple[dict[st
     msg = next((m for m in state.get("inbox", []) if m.get("mid") == mid), None)
     if msg is None:
         return state, None
+    if msg.get("handled"):
+        return state, get_task(state, msg["handled"])
     emp = _emp(state, eid)
     if emp is None:
         return state, None
@@ -515,9 +589,19 @@ def chat_with_employee(state: dict[str, Any], eid: str, text: str) -> tuple[dict
     emp = _emp(state, eid)
     if emp is None:
         return state, "Karyawan tidak ditemukan."
+    text = str(text or "").strip()
+    if not text:
+        return state, "Pesan kosong."
     cfg = load_config()
+    history = state.setdefault("chats", {}).setdefault(eid, [])
     try:
-        result = llm.quick_reply(emp, text, cfg.get("company", "perusahaan"), cfg.get("boss_name", "Bos"))
+        result = llm.quick_reply(
+            emp,
+            text,
+            cfg.get("company", "perusahaan"),
+            cfg.get("boss_name", "Bos"),
+            history=history,
+        )
         reply = result.text
         _stats(state, "api_calls")
         emp["state"] = EMP_IDLE
@@ -530,7 +614,7 @@ def chat_with_employee(state: dict[str, Any], eid: str, text: str) -> tuple[dict
         {"at": now(), "who": "boss", "text": text}
     )
     state["chats"][eid].append({"at": now(), "who": eid, "text": reply})
-    del state["chats"][eid][-24:]
+    del state["chats"][eid][:-24]
     save_state(state)
     return state, reply
 

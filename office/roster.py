@@ -21,7 +21,7 @@ ROOMS: dict[str, Room] = {
             icon="mark_chat_unread",
             color="#38BDF8",
             desc="Semua pesan, chat, dan permintaan masuk disortir di sini.",
-            gx=0, gy=3, gw=3, gh=3,
+            gx=0, gy=5, gw=5, gh=5,
             furniture=("desk", "monitor", "plant", "sofa"),
         ),
         Room(
@@ -509,12 +509,66 @@ ROLE_FOR_DELIVERABLE = {
 }
 
 
-def suggested_employee(deliverable: str) -> str:
-    role = ROLE_FOR_DELIVERABLE.get(deliverable, "engineer")
-    for emp in ROSTER:
-        if emp.role == role:
-            return emp.eid
-    return ROSTER[0].eid
+ROLE_AFFINITY: dict[str, tuple[str, ...]] = {
+    "kode": ("engineer", "architect"),
+    "perbaikan bug": ("engineer", "qa", "security"),
+    "riset": ("researcher", "analyst"),
+    "artikel": ("writer", "marketing", "researcher"),
+    "konten": ("marketing", "writer"),
+    "desain": ("designer", "engineer"),
+    "laporan": ("analyst", "researcher"),
+    "deployment": ("ops", "engineer", "security"),
+    "balasan pesan": ("reception", "marketing"),
+    "dokumen": ("engineer", "architect", "researcher"),
+}
+
+
+def rank_employees(
+    deliverable: str,
+    state: dict[str, Any] | None = None,
+    brief: str = "",
+) -> list[tuple[str, float]]:
+    """Urutkan kandidat dari kompetensi, beban kerja, energi, dan rekam jejak."""
+    roles = ROLE_AFFINITY.get(deliverable, (ROLE_FOR_DELIVERABLE.get(deliverable, "engineer"),))
+    employees = (state or {}).get("employees", {})
+    active_counts: dict[str, int] = {}
+    for task in (state or {}).get("tasks", []):
+        if task.get("status") in ("menunggu", "dikerjakan", "menunggu persetujuan"):
+            eid = task.get("assignee", "")
+            active_counts[eid] = active_counts.get(eid, 0) + 1
+
+    text = brief.lower()
+    scored: list[tuple[str, float]] = []
+    for base in ROSTER:
+        current = employees.get(base.eid, {})
+        try:
+            affinity = roles.index(base.role)
+            score = 100.0 - affinity * 22.0
+        except ValueError:
+            score = 24.0
+        score -= active_counts.get(base.eid, 0) * 16.0
+        score += (float(current.get("energy", base.energy)) - 50.0) * 0.12
+        score += (float(current.get("mood", base.mood)) - 50.0) * 0.05
+        done = max(0, int(current.get("tasks_done", 0)))
+        rejected = max(0, int(current.get("tasks_rejected", 0)))
+        if done + rejected:
+            score += (done / (done + rejected) - 0.5) * 12.0
+        # Sedikit koreksi dari istilah tugas; bukan pengganti pilihan bos.
+        if any(word in text for word in ("arsitektur", "schema", "skalabilitas")) and base.role == "architect":
+            score += 24
+        if any(word in text for word in ("bug", "error", "test", "regresi")) and base.role == "qa":
+            score += 12
+        if any(word in text for word in ("api", "backend", "database")) and base.eid == "bimo":
+            score += 12
+        if any(word in text for word in ("aman", "security", "token", "vulnerability")) and base.role == "security":
+            score += 20
+        scored.append((base.eid, round(score, 2)))
+    return sorted(scored, key=lambda row: (-row[1], row[0]))
+
+
+def suggested_employee(deliverable: str, state: dict[str, Any] | None = None, brief: str = "") -> str:
+    ranked = rank_employees(deliverable, state=state, brief=brief)
+    return ranked[0][0] if ranked else ROSTER[0].eid
 
 
 def sync_employees(saved: dict[str, Any] | None) -> dict[str, Any]:

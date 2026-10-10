@@ -17,10 +17,10 @@ cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # lalu isi kunci An
 streamlit run app.py
 ```
 
-Uji otomatis (104 test):
+Uji otomatis:
 
 ```bash
-python -m pytest tests -q
+python -m pytest test -q
 ```
 
 Pratinjau panggung kantor (PNG statis dari SVG): `data/pratinjau_kantor.png`.
@@ -55,6 +55,27 @@ ternyata mati otomatis dinonaktifkan dan dipindah ke pengganti.
 
 Setiap karyawan punya model utama + rantai **fallback** (role → global), jadi satu model
 mati tidak pernah membuat karyawan macet.
+
+## Mesin kerja v3
+
+Pembaruan v3 memperkuat logika internal tanpa mengganti desain UI:
+
+* **Kontrak jawaban per jabatan dan keluaran** — engineer, QA, riset, desain, DevOps,
+  resepsionis, dan role lain mendapat standar kerja berbeda; kode wajib implementabel,
+  riset dilarang mengarang sumber, dan deployment wajib memikirkan rollback.
+* **Quality gate lokal** — hasil dinilai tanpa panggilan model tambahan (kelengkapan,
+  struktur, implementasi, pengujian, dan kebocoran reasoning). Skor dan temuan disimpan
+  di task untuk audit dan pengembangan UI berikutnya.
+* **Revisi benar-benar kontekstual** — catatan bos, versi hasil sebelumnya, dan riwayat
+  keputusan dikirim ke karyawan agar revisi memperbaiki hasil, bukan mengulang dari nol.
+* **Workflow idempotent** — klik/rerun ganda tidak lagi menggandakan API call, XP,
+  statistik persetujuan, delegasi pesan, atau paket rilis.
+* **Antrean berbasis prioritas** dan rekomendasi karyawan mempertimbangkan kompetensi,
+  beban aktif, energi, mood, rekam jejak, serta kata kunci brief.
+* **Percakapan berkelanjutan** — karyawan mengingat delapan pesan terakhir, dengan
+  batas histori yang benar dan perlindungan prompt injection untuk konteks repo/pesan.
+* **Persistensi schema v4** — migrasi state lama, normalisasi data rusak, statistik baru,
+  penulisan atomik dengan flush ke disk, dan lock proses.
 
 ## Karyawan
 
@@ -110,6 +131,7 @@ app.py                  # UI Streamlit (9 panel)
 office/config.py        # secrets, provider, path
 office/models.py        # katalog model + probe live + migrasi model mati
 office/llm.py           # pemanggil API (Groq/OpenRouter/Aion) + fallback
+office/quality.py       # kontrak jawaban per role + pemeriksaan mutu lokal
 office/engine.py        # alur tugas, persetujuan, aktivitas, rilis, inbox
 office/roster.py        # denah ruang + roster karyawan
 office/state.py         # persistensi JSON + cache
