@@ -171,7 +171,103 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
   padding: 12px 14px; box-shadow: 0 18px 60px rgba(2,6,23,.5);
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) [data-testid="stVerticalBlock"] { gap: .4rem; }
+/* ===== AOG DRAWER: READABLE THEME ===== */
+/* Warna teks utama dan sekunder */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
+  color: #E8EEF9 !important;
+  background: #131C30 !important;
+  border: 1px solid #34435F !important;
+}
 
+/* Judul, label, deskripsi, dan teks biasa */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) h1,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) h2,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) h3,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) p,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) label,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) .small,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) .tiny {
+  color: #C4D0E4 !important;
+}
+
+/* Input teks dan area teks */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-testid="stTextInput"] input,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-testid="stTextArea"] textarea {
+  background: #202C45 !important;
+  color: #F3F6FC !important;
+  border: 1px solid #536581 !important;
+  -webkit-text-fill-color: #F3F6FC !important;
+}
+
+/* Placeholder input */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) input::placeholder,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) textarea::placeholder {
+  color: #A7B5CC !important;
+  -webkit-text-fill-color: #A7B5CC !important;
+  opacity: 1 !important;
+}
+
+/* Dropdown dan pilihan */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-baseweb="select"] > div {
+  background: #202C45 !important;
+  color: #F3F6FC !important;
+  border-color: #536581 !important;
+}
+
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-baseweb="select"] * {
+  color: #F3F6FC !important;
+}
+
+/* Panel pilihan dropdown */
+div[data-baseweb="popover"] [role="listbox"],
+div[data-baseweb="menu"] {
+  background: #202C45 !important;
+  border: 1px solid #536581 !important;
+}
+
+div[data-baseweb="popover"] [role="option"] {
+  color: #F3F6FC !important;
+}
+
+div[data-baseweb="popover"] [role="option"]:hover {
+  background: #34445F !important;
+}
+
+/* Checkbox dan radio */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-testid="stCheckbox"] label,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-testid="stRadio"] label {
+  color: #E8EEF9 !important;
+}
+
+/* Fokus input */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+input:focus,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+textarea:focus {
+  border-color: #38BDF8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.20) !important;
+}
+
+/* Tombol panel */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+.stButton button,
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+.stFormSubmitButton button {
+  color: #E8EEF9 !important;
+  border-color: #344765 !important;
+}
+
+/* Pesan bantuan */
+div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head)
+[data-testid="stAlert"] {
+  color: #E8EEF9 !important;
+}
 /* Fallback browser tua tanpa :has() — pakai urutan anak dari stVerticalBlock.
    Urutan anak: 1,2 = blok <style> CSS (disembunyikan), 3 = panggung kantor,
    4 = bar atas, 5 = bar bawah, 6 = drawer (hanya saat terbuka). */
