@@ -14,7 +14,7 @@ except Exception:  # pragma: no cover - dipakai saat test tanpa streamlit
 
 APP_NAME = "AOG Virtual Office"
 APP_TAGLINE = "Kantor simulasi berisi karyawan model AI — Anda bosnya."
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 # ----------------------------------------------------------------------------- secrets
 SECRET_KEYS = {

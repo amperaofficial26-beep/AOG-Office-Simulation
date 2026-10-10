@@ -181,6 +181,11 @@ class Task:
     files: list[str] = field(default_factory=list)
     repo_context: str = ""
     history: list[dict[str, Any]] = field(default_factory=list)
+    revision_history: list[dict[str, Any]] = field(default_factory=list)
+    previous_result: str = ""
+    quality: dict[str, Any] = field(default_factory=dict)
+    quality_score: int = 0
+    attempt_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -191,6 +196,8 @@ class Task:
         data = {k: v for k, v in raw.items() if k in known}
         data.setdefault("files", [])
         data.setdefault("history", [])
+        data.setdefault("revision_history", [])
+        data.setdefault("quality", {})
         return cls(**data)
 
     @property

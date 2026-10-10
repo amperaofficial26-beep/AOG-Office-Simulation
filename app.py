@@ -601,7 +601,7 @@ def panel_tugas() -> None:
             placeholder="Jelaskan apa yang harus dikerjakan, batasan, dan hasil yang diharapkan.",
         )
         c1, c2, c3 = st.columns([2, 1, 1])
-        default_emp = suggested_employee(deliverable)
+        default_emp = suggested_employee(deliverable, state=state, brief=brief)
         emp_idx = ids.index(default_emp) if default_emp in ids else 0
         label_by_id = dict(zip(ids, labels))
         chosen = c1.selectbox("Karyawan", options=ids, index=emp_idx, format_func=lambda eid: label_by_id.get(eid, eid), key="task_assignee",)
@@ -664,9 +664,8 @@ def panel_tugas() -> None:
             unsafe_allow_html=True,
         )
     if queue and st.button("Jalankan semua antrean", type="primary", icon=mat("play_arrow"), use_container_width=True):
-        for task in queue:
-            with st.spinner(f"{emp_name(state, task['assignee'])} mengerjakan: {task['title']}"):
-                engine.run_task(state, task["tid"])
+        with st.spinner("Karyawan mengerjakan antrean berdasarkan prioritas..."):
+            engine.run_queue(state)
         persist()
         st.rerun()
 

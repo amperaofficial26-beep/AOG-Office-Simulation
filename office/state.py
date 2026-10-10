@@ -10,6 +10,7 @@ import copy
 import json
 import os
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -24,28 +25,33 @@ from .config import (
 )
 
 _CACHE: dict[str, tuple[float, Any]] = {}
-_SCHEMA_VERSION = 3
+_IO_LOCK = threading.RLock()
+_SCHEMA_VERSION = 4
 
 # ----------------------------------------------------------------------------- util
 def _atomic_write(path: str, payload: Any) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+    directory = os.path.dirname(path) or "."
+    with _IO_LOCK:
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
 
 
 def load_json(path: str, default: Any = None) -> Any:
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with _IO_LOCK, open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
     except FileNotFoundError:
         return copy.deepcopy(default) if default is not None else default
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, TypeError):
         return copy.deepcopy(default) if default is not None else default
 
 
@@ -161,6 +167,7 @@ def empty_state() -> dict[str, Any]:
         "inbox": [],
         "log": [],
         "releases": [],
+        "chats": {},
         "stats": {
             "tasks_created": 0,
             "tasks_done": 0,
@@ -175,11 +182,45 @@ def empty_state() -> dict[str, Any]:
 
 
 def migrate_state(state: dict[str, Any]) -> dict[str, Any]:
-    """Pastikan state lama tetap bisa dibuka oleh versi baru."""
+    """Normalisasi state lama/rusak tanpa membuang progres pengguna."""
+    if not isinstance(state, dict):
+        return empty_state()
     base = empty_state()
-    base.update({k: v for k, v in state.items() if k in base})
-    for key, value in base["stats"].items():
-        base["stats"].setdefault(key, state.get("stats", {}).get(key, value))
+    for key in ("created_at", "sim_clock", "day", "employees", "tasks", "inbox", "log", "releases", "chats"):
+        if key in state:
+            base[key] = copy.deepcopy(state[key])
+
+    # Merge dari default ke nilai lama, bukan sebaliknya, agar statistik baru
+    # selalu tersedia setelah upgrade schema.
+    old_stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
+    for key, default in base["stats"].items():
+        try:
+            base["stats"][key] = max(0, int(old_stats.get(key, default)))
+        except (TypeError, ValueError):
+            base["stats"][key] = default
+
+    for key in ("tasks", "inbox", "log", "releases"):
+        if not isinstance(base[key], list):
+            base[key] = []
+    if not isinstance(base["employees"], dict):
+        base["employees"] = {}
+    if not isinstance(base["chats"], dict):
+        base["chats"] = {}
+
+    # Field baru task diberi default. Item rusak dilewati daripada membuat
+    # seluruh kantor gagal dibuka.
+    clean_tasks = []
+    for task in base["tasks"]:
+        if not isinstance(task, dict) or not task.get("tid"):
+            continue
+        task.setdefault("history", [])
+        task.setdefault("revision_history", [])
+        task.setdefault("quality", {})
+        task.setdefault("quality_score", 0)
+        task.setdefault("attempt_count", 0)
+        task.setdefault("previous_result", "")
+        clean_tasks.append(task)
+    base["tasks"] = clean_tasks
     base["schema"] = _SCHEMA_VERSION
     return base
 

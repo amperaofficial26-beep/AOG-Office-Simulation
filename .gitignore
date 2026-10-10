@@ -7,3 +7,4 @@ data/config.json
 data/exports/
 .streamlit/secrets.toml
 .pytest_cache/
+office/ui/_stage3d_component/

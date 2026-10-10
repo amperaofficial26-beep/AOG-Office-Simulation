@@ -1,3 +1,3 @@
 """AOG Virtual Office — inti simulasi kantor dengan karyawan model AI."""
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
