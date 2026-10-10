@@ -220,7 +220,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testi
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
   width: 44px; height: 44px; border-radius: 50%; background: transparent;
-  border: none; box-shadow: none; color: #FFFFFF;
+  border: none; box-shadow: none; color: #FFFFFF; transform: translateY(-6px);
   transition: transform .35s cubic-bezier(.34,1.56,.64,1), background .25s, box-shadow .25s;
 }
 /* hover: ikon naik keluar dari bar, lingkaran putih mengambang terpisah */
