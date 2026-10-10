@@ -263,6 +263,14 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin:
     width: 100vh; height: 100vw;
     transform: rotate(90deg); transform-origin: top left;
   }
+/* === HUD ICON SIZE OVERRIDE === */
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button span,
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button svg,
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button .material-symbols-outlined {
+    font-size: 24px !important;
+    width: 24px;
+    height: 24px;
+  }
 }
 """
 
