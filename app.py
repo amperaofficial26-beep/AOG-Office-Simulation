@@ -331,28 +331,44 @@ def top_bar() -> None:
 
 
 def bottom_bar() -> None:
-    """Semua tombol fitur ada di bawah, sejajar dalam satu pil."""
+    """Semua tombol di bawah: fitur dulu, lalu tombol ruang."""
     summ = engine.summary(S())
-    cols = st.columns(len(TOPBAR), gap="small", vertical_alignment="center")
-    for i, (col, (kunci, icon_name, judul)) in enumerate(zip(cols, TOPBAR)):
+    fitur = [("fitur", slug, icon_name, judul) for slug, icon_name, judul in TOPBAR]
+    ruang = [("ruang", rid, ROOMS[rid].icon, ROOMS[rid].name) for rid in ROOM_ORDER]
+    semua = fitur + ruang
+    cols = st.columns(len(semua), gap="small", vertical_alignment="center")
+    for i, (col, (jenis, kunci, icon_name, judul)) in enumerate(zip(cols, semua)):
         with col:
             if i == 0:
                 st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
-            badge = ""
-            if kunci == "approval" and summ["pending"]:
-                badge = f" ({summ['pending']})"
-            if kunci == "inbox" and summ["inbox_unread"]:
-                badge = f" ({summ['inbox_unread']})"
-            aktif = st.session_state.get("drawer") == kunci
-            if st.button(
-                " ",
-                key=f"fb_{kunci}",
-                icon=mat(icon_name),
-                help=f"{judul}{badge}",
-                type="primary" if aktif else "secondary",
-                use_container_width=True,
-            ):
-                open_drawer(None if aktif else kunci)
+            if jenis == "fitur":
+                badge = ""
+                if kunci == "approval" and summ["pending"]:
+                    badge = f" ({summ['pending']})"
+                if kunci == "inbox" and summ["inbox_unread"]:
+                    badge = f" ({summ['inbox_unread']})"
+                aktif = st.session_state.get("drawer") == kunci
+                if st.button(
+                    " ",
+                    key=f"fb_{kunci}",
+                    icon=mat(icon_name),
+                    help=f"{judul}{badge}",
+                    type="primary" if aktif else "secondary",
+                    use_container_width=True,
+                ):
+                    open_drawer(None if aktif else kunci)
+            else:
+                aktif = st.session_state.get("selected_room") == kunci and st.session_state.get("drawer") == "kantor"
+                if st.button(
+                    " ",
+                    key=f"bb_{kunci}",
+                    icon=mat(icon_name),
+                    help=judul,
+                    type="primary" if aktif else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state["selected_room"] = kunci
+                    open_drawer("kantor")
 
 
 def drawer() -> None:
