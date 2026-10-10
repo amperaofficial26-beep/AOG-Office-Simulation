@@ -108,7 +108,18 @@ aktivitas (laptop, cangkir, gamepad, "zzz"). Semua animasi CSS murni di dalam SV
 
 Panggung dirender dua lapis: denah isometrik **SVG** sebagai lapisan dasar (selalu tergambar,
 juga menjadi cadangan bila WebGL/komponen tidak termuat), dan panggung **3D** low-poly
-(Three.js, gaya Two Point Hospital) yang menutupinya saat aktif.
+(Three.js, gaya Two Point Hospital) yang menutupinya saat aktif. Panggung 3D memuat
+meja kerja dengan perangkat lengkap, ruang rapat dengan meja konferensi, area pantry,
+printer, lampu, dekorasi, dan furnitur khusus tiap ruangan. Di empat tepi kantor terdapat
+bus sirkuit ala CPU: paket cahaya bergerak mengelilingi panggung dan mengalir ke label
+GitHub, Streamlit, Model AI, Inbox, Tugas, Data, Otomasi, dan Deploy. Jejak di ujung luar
+memudar secara transparan ke latar; label tersebut ilustrasi koneksi, bukan tombol navigasi.
+Gunakan mouse/touch untuk menggeser panggung dan tombol **+ / − / Pusat** untuk zoom.
+Animasi jalur menghormati preferensi sistem *reduced motion*. Three.js disertakan secara
+lokal (`office/ui/vendor/`) sehingga panggung tidak memerlukan CDN.
+
+Untuk melihat pratinjau 3D mandiri, jalankan `python -m office.ui.stage3d` lalu buka
+`data/stage3d_preview.html` di browser yang mendukung WebGL.
 
 ## Alur kerja bos
 

@@ -36,6 +36,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import tempfile
 import traceback
 from pathlib import Path
@@ -46,8 +47,8 @@ try:  # nilai state asli dari proyek
 except Exception:  # pragma: no cover - modul dipakai terpisah
     EMP_COFFEE = EMP_GAMING = EMP_IDLE = EMP_NAP = EMP_WALKING = None
 
-THREE_URL = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
-STAGE3D_VERSION = "v2-komponen"
+THREE_ASSET = Path(__file__).parent / "vendor" / "three.min.js"
+STAGE3D_VERSION = "v3-circuit-office"
 _log = logging.getLogger("aog.stage3d")
 _announced: set[str] = set()
 
@@ -259,8 +260,10 @@ def build_payload(
 def build_html(payload: dict[str, Any], height: int = 640) -> str:
     """HTML mandiri (data tertanam). Dipakai untuk mode cadangan dan pratinjau."""
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    # HTML cadangan/pratinjau adalah satu berkas mandiri; tidak perlu CDN.
+    library = THREE_ASSET.read_text(encoding="utf-8")
     return (
-        _TEMPLATE.replace("__THREE__", THREE_URL)
+        _TEMPLATE.replace('<script src="__THREE__"></script>', f"<script>{library}</script>")
         .replace("__HEIGHT__", str(int(height)))
         .replace("__DATA__", data)
     )
@@ -269,7 +272,7 @@ def build_html(payload: dict[str, Any], height: int = 640) -> str:
 def _component_html() -> str:
     """HTML untuk komponen dua arah: tanpa data tertanam, menunggu pesan dari Streamlit."""
     return (
-        _TEMPLATE.replace("__THREE__", THREE_URL)
+        _TEMPLATE.replace("__THREE__", "./three.min.js")
         .replace("__HEIGHT__", "700")
         .replace("__DATA__", "null")
     )
@@ -307,6 +310,9 @@ def _get_component() -> Any:
                 target = cand / "index.html"
                 if not target.exists() or target.read_text(encoding="utf-8") != html:
                     target.write_text(html, encoding="utf-8")
+                bundle = cand / "three.min.js"
+                if not bundle.exists() or bundle.stat().st_size != THREE_ASSET.stat().st_size:
+                    shutil.copyfile(THREE_ASSET, bundle)
                 folder = cand
                 break
             except OSError as exc:
@@ -497,6 +503,126 @@ var CREAM=new THREE.Color("#EDE5A8"),CREAM2=new THREE.Color("#E4DA98"),LINE=new 
   });
 })();
 
+/* ---------- CPU office: bus di setiap sisi, cabang ke aplikasi ----------
+   Jejak dilukis SEKALI di bidang transparan. Gradien alpha di bagian luar
+   bertindak sebagai soft mask: tidak ada tepi persegi/garis yang terpotong. */
+var circuitPulses=[];
+function buildCircuits(){
+  var PAD=4.25,SIZE=Math.max(GW,GH)+2*PAD,RES=SH?2048:1024;
+  var canvas=document.createElement("canvas");canvas.width=canvas.height=RES;
+  var ctx=canvas.getContext("2d"),scale=RES/SIZE;
+  ctx.setTransform(scale,0,0,scale,(SIZE-GW)/2*scale,(SIZE-GH)/2*scale);
+  ctx.lineJoin="round";ctx.lineCap="round";
+  function trace(points,color,fade){
+    var a=points[0],b=points[points.length-1],ink=color;
+    if(fade){
+      ink=ctx.createLinearGradient(a[0],a[1],b[0],b[1]);
+      ink.addColorStop(0,color);ink.addColorStop(0.65,color);
+      ink.addColorStop(1,"rgba(56,189,248,0)");
+    }
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);
+    points.slice(1).forEach(function(p){ctx.lineTo(p[0],p[1]);});
+    ctx.strokeStyle=ink;ctx.lineWidth=0.18;ctx.shadowColor=color;
+    ctx.shadowBlur=SH?22:10;ctx.globalAlpha=0.55;ctx.stroke();
+    ctx.lineWidth=0.065;ctx.shadowBlur=0;ctx.globalAlpha=0.95;ctx.stroke();ctx.globalAlpha=1;
+  }
+  // Empat sisi chip punya dua bus paralel dan via teratur.
+  [0.35,0.56].forEach(function(d,i){
+    var col=i?"#397a9d":"#67e8f9";
+    trace([[-d,-d],[GW+d,-d],[GW+d,GH+d],[-d,GH+d],[-d,-d]],col,false);
+  });
+  for(var v=1.5;v<GW;v+=2.5){
+    [0,GH].forEach(function(z){
+      trace([[v,z<1?-0.35:GH+0.35],[v,z<1?-0.62:GH+0.62]],"#38bdf8",false);
+    });
+  }
+  for(var v=1.5;v<GH;v+=2.5){
+    [0,GW].forEach(function(x){
+      trace([[x<1?-0.35:GW+0.35,v],[x<1?-0.62:GW+0.62,v]],"#38bdf8",false);
+    });
+  }
+  var links=[
+    {side:"n",at:6,label:"GITHUB",color:"#7dd3fc"},
+    {side:"n",at:19,label:"MODEL AI",color:"#c4b5fd"},
+    {side:"e",at:6,label:"STREAMLIT",color:"#f9a8d4"},
+    {side:"e",at:19,label:"DEPLOY",color:"#fdba74"},
+    {side:"s",at:6,label:"DATA",color:"#6ee7b7"},
+    {side:"s",at:19,label:"OTOMASI",color:"#93c5fd"},
+    {side:"w",at:6,label:"INBOX",color:"#fda4af"},
+    {side:"w",at:19,label:"TUGAS",color:"#fcd34d"}
+  ];
+  var pulseCanvas=document.createElement("canvas");pulseCanvas.width=pulseCanvas.height=64;
+  var px=pulseCanvas.getContext("2d"),halo=px.createRadialGradient(32,32,2,32,32,31);
+  halo.addColorStop(0,"rgba(255,255,255,1)");halo.addColorStop(0.22,"rgba(255,255,255,.8)");
+  halo.addColorStop(1,"rgba(255,255,255,0)");px.fillStyle=halo;px.fillRect(0,0,64,64);
+  var pulseTexture=new THREE.CanvasTexture(pulseCanvas);
+  links.forEach(function(link,index){
+    var isX=link.side==="e"||link.side==="w",dir=link.side==="n"||link.side==="w"?-1:1;
+    var edge=link.side==="n"?0:link.side==="s"?GH:link.side==="w"?0:GW;
+    var tangent=link.at+(index%2?-0.2:0.2);
+    function point(out,shift){return isX?[edge+dir*out,link.at+shift]:[link.at+shift,edge+dir*out];}
+    var path=[point(0.4,0),point(1.0,0),point(1.28,tangent-link.at),
+              point(2.1,tangent-link.at),point(3.95,tangent-link.at)];
+    trace(path,link.color,true);
+    // Pin terhubung ke bus; label aplikasi di jalur, ekor sesudahnya hilang ke latar.
+    ctx.beginPath();ctx.arc(path[0][0],path[0][1],0.12,0,Math.PI*2);
+    ctx.fillStyle=link.color;ctx.shadowColor=link.color;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+    var chip=point(2.12,tangent-link.at),cw=2.65,ch=0.7;
+    rr(ctx,chip[0]-cw/2,chip[1]-ch/2,cw,ch,0.13);
+    ctx.fillStyle="rgba(15,34,51,.84)";ctx.fill();
+    ctx.lineWidth=0.024;ctx.strokeStyle=link.color;ctx.globalAlpha=0.8;ctx.stroke();ctx.globalAlpha=1;
+    ctx.beginPath();ctx.arc(chip[0]-cw/2+0.18,chip[1],0.055,0,Math.PI*2);
+    ctx.fillStyle=link.color;ctx.fill();
+    ctx.font="bold 0.31px "+FONT;ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillStyle="#e5f6ff";ctx.fillText(link.label,chip[0]+0.07,chip[1],cw-0.4);
+    // Satu paket cahaya menyusuri masing-masing cabang, bukan redraw tekstur setiap frame.
+    var sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:pulseTexture,color:link.color,
+      transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+    sprite.scale.set(0.62,0.62,1);sprite.renderOrder=2;scene.add(sprite);
+    circuitPulses.push({sprite:sprite,path:path,phase:index/links.length,speed:0.16,branch:true});
+  });
+  // Empat paket lain terus berkeliling bus CPU (semua sisi, termasuk sudut).
+  var ringPath=[[-0.45,-0.45],[GW+0.45,-0.45],[GW+0.45,GH+0.45],
+                [-0.45,GH+0.45],[-0.45,-0.45]];
+  for(var k=0;k<4;k++){
+    var light=new THREE.Sprite(new THREE.SpriteMaterial({map:pulseTexture,color:"#a5f3fc",
+      transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+    light.scale.set(0.78,0.78,1);light.renderOrder=2;scene.add(light);
+    circuitPulses.push({sprite:light,path:ringPath,phase:k/4,speed:0.034,branch:false});
+  }
+  var tex=new THREE.CanvasTexture(canvas);
+  tex.anisotropy=maxAniso;tex.minFilter=THREE.LinearFilter;
+  var ground=new THREE.Mesh(new THREE.PlaneGeometry(SIZE,SIZE),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+  ground.rotation.x=-Math.PI/2;ground.position.set(GW/2,-0.34,GH/2);
+  ground.renderOrder=0;scene.add(ground);
+  // Jalur logam di tepi fisik slab membuat koneksi tetap terlihat dari semua sudut.
+  var rail=new THREE.MeshBasicMaterial({color:"#35bbd6"});
+  [[GW+0.3,0.06,0.06,GW/2,-0.06,-0.15],
+   [GW+0.3,0.06,0.06,GW/2,-0.06,GH+0.15],
+   [0.06,0.06,GH+0.3,-0.15,-0.06,GH/2],
+   [0.06,0.06,GH+0.3,GW+0.15,-0.06,GH/2]].forEach(function(p){
+    var m=new THREE.Mesh(new THREE.BoxGeometry(p[0],p[1],p[2]),rail);
+    m.position.set(p[3],p[4],p[5]);scene.add(m);
+  });
+}
+buildCircuits();
+function animateCircuits(t){
+  var still=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  circuitPulses.forEach(function(p){
+    var u=still?0.46:(t*p.speed+p.phase)%1,path=p.path,total=0,lengths=[];
+    for(var i=0;i<path.length-1;i++){
+      var len=Math.hypot(path[i+1][0]-path[i][0],path[i+1][1]-path[i][1]);
+      lengths.push(len);total+=len;
+    }
+    var distance=u*total,idx=0;
+    while(idx<lengths.length-1&&distance>lengths[idx])distance-=lengths[idx++];
+    var f=distance/lengths[idx],a=path[idx],b=path[idx+1];
+    p.sprite.position.set(a[0]+(b[0]-a[0])*f,-0.27,a[1]+(b[1]-a[1])*f);
+    p.sprite.material.opacity=p.branch?Math.min(1,u*8,(1-u)*5)*0.9:0.82;
+  });
+}
+
 /* ---------- dinding ---------- */
 var GOLD="#E2B33C";
 function signTex(text,color,badge){
@@ -568,15 +694,31 @@ function makeDesk(color){
   box(0.16,0.03,0.1,"#2B2F38",0,0.495,-0.12,g);box(0.04,0.1,0.04,"#2B2F38",0,0.55,-0.12,g);
   box(0.5,0.31,0.035,"#1F2630",0,0.72,-0.12,g);
   var s=glow(0.44,0.25,mix(color,"#FFFFFF",0.25),0,0.72,-0.1,g);screens.push({m:s.material,base:s.material.color.clone()});
-  box(0.34,0.015,0.11,"#E5E7EB",0,0.485,0.12,g);
+  // Perangkat kerja lengkap: CPU mini, laci, alas meja, keyboard, mouse, lampu & dokumen.
+  box(0.34,0.015,0.13,"#394553",0,0.484,0.12,g);
+  box(0.29,0.012,0.075,"#E5E7EB",0,0.495,0.12,g);
+  for(var key=0;key<7;key++)box(0.028,0.003,0.045,"#8BAFC2",-0.12+key*0.04,0.503,0.12,g).castShadow=false;
+  box(0.055,0.02,0.085,"#DAE3EA",0.23,0.5,0.12,g);
+  box(0.17,0.26,0.26,"#2D3949",-0.34,0.2,-0.03,g);
+  box(0.03,0.02,0.015,"#38BDF8",-0.27,0.27,0.11,g);
+  cyl(0.025,0.035,0.22,"#37485A",0.36,0.59,-0.1,g,8);
+  var lamp=box(0.17,0.035,0.12,"#E2B33C",0.36,0.72,-0.1,g);lamp.rotation.z=-0.2;
   cyl(0.04,0.035,0.07,"#FFFFFF",0.36,0.51,0.08,g,8);
   var paper=box(0.2,0.01,0.28,"#FFFFFF",-0.33,0.485,0.02,g);paper.rotation.y=0.25;
+  box(0.12,0.01,0.015,"#38BDF8",-0.33,0.499,0.03,g).rotation.y=0.25;
   return g;
 }
 function makeChair(c){
   var g=new THREE.Group(),col=mix(c,"#FFFFFF",0.1);
   box(0.36,0.06,0.36,col,0,0.2,0,g);box(0.34,0.38,0.05,col,0,0.42,-0.17,g);
-  cyl(0.03,0.03,0.18,"#444444",0,0.1,0,g,6);cyl(0.17,0.17,0.03,"#333333",0,0.015,0,g,8);
+  box(0.05,0.06,0.24,"#374151",-0.21,0.29,0,g);
+  box(0.05,0.06,0.24,"#374151",0.21,0.29,0,g);
+  cyl(0.03,0.03,0.18,"#444444",0,0.1,0,g,6);
+  for(var i=0;i<5;i++){
+    var a=i*Math.PI*2/5;
+    var wheel=box(0.16,0.018,0.027,"#303743",Math.cos(a)*0.09,0.032,Math.sin(a)*0.09,g);
+    wheel.rotation.y=-a;
+  }
   return g;
 }
 function makePlant(){
@@ -653,6 +795,50 @@ function makeTrophy(){
   sph(0.05,GOLD,-0.14,0.62,0,g);sph(0.05,GOLD,0.14,0.62,0,g);
   return g;
 }
+function makeConference(){
+  var g=new THREE.Group();
+  // Area rapat: karpet, meja konferensi, layar presentasi & enam kursi.
+  var rug=box(2.8,0.012,2.3,"#7487AE",0,0.018,0,g);rug.receiveShadow=SH;
+  box(1.9,0.07,0.84,WOOD,0,0.52,0,g);
+  box(1.6,0.44,0.07,WOOD_D,0,0.26,0,g);
+  for(var i=-1;i<=1;i++){
+    [-0.72,0.72].forEach(function(z){
+      var chair=makeChair("#7389C4");chair.position.set(i*0.58,0,z);
+      if(z<0)chair.rotation.y=Math.PI;g.add(chair);
+    });
+  }
+  box(0.32,0.013,0.2,"#28374B",0,0.565,0,g);
+  box(0.18,0.01,0.12,"#E6ECF2",-0.5,0.565,0,g);
+  cyl(0.075,0.075,0.025,"#D5AF55",0.55,0.58,0,g,12);
+  return g;
+}
+function makeCafeTable(){
+  var g=new THREE.Group();
+  cyl(0.035,0.035,0.38,"#546476",0,0.2,0,g,8);
+  cyl(0.24,0.24,0.045,WOOD,0,0.41,0,g,16);
+  cyl(0.19,0.19,0.025,"#43546A",0,0.02,0,g,12);
+  cyl(0.05,0.04,0.075,"#F9FAFB",0,0.49,0,g,10);
+  var stool=makeChair("#D19E68");stool.scale.set(0.7,0.7,0.7);
+  stool.position.set(0.48,0,0.1);g.add(stool);
+  return g;
+}
+function makePrinter(){
+  var g=new THREE.Group();
+  box(0.58,0.6,0.38,"#53657A",0,0.3,0,g);
+  box(0.52,0.18,0.42,"#DAE5EF",0,0.69,0,g);
+  box(0.36,0.025,0.2,"#FFFFFF",0,0.8,-0.08,g);
+  box(0.4,0.025,0.12,"#192D40",0,0.56,0.23,g);
+  box(0.06,0.015,0.02,"#34D399",0.18,0.72,0.22,g);
+  return g;
+}
+function makeWallArt(c){
+  var g=new THREE.Group();
+  box(0.57,0.4,0.025,"#865B36",0,1.0,0,g);
+  box(0.5,0.33,0.03,"#ECF3F6",0,1.0,0.016,g);
+  box(0.15,0.15,0.035,c,-0.12,1.05,0.038,g);
+  box(0.16,0.07,0.035,"#38516A",0.11,0.94,0.038,g);
+  return g;
+}
 var BUILD={plant:makePlant,sofa:makeSofa,whiteboard:makeWhiteboard,server:makeServer,bookshelf:makeBookshelf,
   easel:makeEasel,coffee:makeCoffee,arcade:makeArcade,trophy:makeTrophy};
 var WALL_ITEMS={whiteboard:0.02,server:0.22,bookshelf:0.17,coffee:0.22,arcade:0.25,trophy:0.2};
@@ -671,7 +857,7 @@ function freeSpot(r,need,inset,obs){
 function furnish(r){
   var obs=[];
   r.spots.forEach(function(s){
-    if(r.lounge){obs.push([s[0],s[1],0.5]);return;}
+    if(r.lounge||r.furniture.indexOf("desk")<0){obs.push([s[0],s[1],0.5]);return;}
     var d=makeDesk(r.color);d.position.set(s[0],0,s[1]+0.55);d.rotation.y=Math.PI;scene.add(d);
     var ch=makeChair(r.color);ch.position.set(s[0],0,s[1]);scene.add(ch);
     obs.push([s[0],s[1]+0.5,0.7]);
@@ -691,6 +877,18 @@ function furnish(r){
     if(!p)return;
     var g=BUILD[f](r.color);g.position.set(p[0],0,p[1]);scene.add(g);obs.push([p[0],p[1],sz[1]]);
   });
+  if(r.rid==="meeting"){
+    var table=makeConference();table.position.set(r.gx+2.5,0,r.gy+2.7);scene.add(table);
+  }
+  if(r.rid==="break"){
+    var cafe=makeCafeTable();cafe.position.set(r.gx+2.5,0,r.gy+2.8);scene.add(cafe);
+  }
+  if(r.rid==="documentation"||r.rid==="reception"){
+    var printer=makePrinter();printer.position.set(r.gx+r.gw-0.6,0,r.gy+1.7);scene.add(printer);
+  }
+  if(r.rid==="design"||r.rid==="marketing"||r.rid==="ai_image"){
+    var art=makeWallArt(r.color);art.position.set(r.gx+0.7,0,r.gy+WT/2+0.03);scene.add(art);
+  }
 }
 rooms.forEach(furnish);
 
@@ -859,8 +1057,10 @@ scene.add(sun);scene.add(sun.target);
 var cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,200);
 var EL=0.70,AZ=Math.PI/4,zoom=saved.zoom||1,tg=saved.tg||{x:GW/2,y:0.4,z:GH/2},hh=10;
 function updateCam(){
-  var aspect=W/H,span=(GW+GH)*Math.SQRT1_2;
-  var vw=span+2.2,vh=(span*Math.sin(EL)+WH*Math.cos(EL)+2.6)*1.16;
+  var aspect=W/H;
+  // Ruang kamera untuk delapan koneksi aplikasi dan ekor jalur yang memudar.
+  var circuitSpan=(GW+GH+15.5)*Math.SQRT1_2;
+  var vw=circuitSpan+1.2,vh=(circuitSpan*Math.sin(EL)+WH*Math.cos(EL)+2.6)*1.12;
   hh=Math.max(vw/aspect,vh)/2/zoom;
   cam.left=-hh*aspect;cam.right=hh*aspect;cam.top=hh;cam.bottom=-hh;cam.updateProjectionMatrix();
   var d=40;
@@ -930,6 +1130,7 @@ function frame(ms){
   if(t-lastSave>0.5){lastSave=t;saveView();}
   screens.forEach(function(s,i){s.m.color.copy(s.base).multiplyScalar(0.82+0.18*Math.sin(t*2.2+i));});
   leds.forEach(function(l){l.m.color.set(Math.sin(t*5+l.ph)>-0.2?"#34D399":"#14532D");});
+  animateCircuits(t);
   renderer.render(scene,cam);
   requestAnimationFrame(frame);
 }
