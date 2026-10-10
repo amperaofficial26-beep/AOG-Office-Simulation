@@ -1,8 +1,6 @@
 """Pengujian lapisan tampilan: ikon Material, karakter SVG, panggung kantor."""
 from __future__ import annotations
 
-import re
-
 import pytest
 
 from office.icons import ALIASES, BRAND_ICONS, available, icon_svg, labeled, mat, resolve

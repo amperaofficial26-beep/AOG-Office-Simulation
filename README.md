@@ -23,7 +23,8 @@ Uji otomatis:
 python -m pytest test -q
 ```
 
-Pratinjau panggung kantor (PNG statis dari SVG): `data/pratinjau_kantor.png`.
+Pratinjau panggung kantor statis: jalankan `python scripts/make_preview.py` (butuh `cairosvg`)
+untuk menghasilkan `data/pratinjau_kantor.png` dari denah SVG.
 
 ## Secrets
 
@@ -105,6 +106,10 @@ Karakter tidak kaku: mereka **berjalan** antar ruang, **mengetik** saat bekerja,
 **ngopi / main game / tidur** saat santai, berkedip, bernapas, dan memakai properti sesuai
 aktivitas (laptop, cangkir, gamepad, "zzz"). Semua animasi CSS murni di dalam SVG.
 
+Panggung dirender dua lapis: denah isometrik **SVG** sebagai lapisan dasar (selalu tergambar,
+juga menjadi cadangan bila WebGL/komponen tidak termuat), dan panggung **3D** low-poly
+(Three.js, gaya Two Point Hospital) yang menutupinya saat aktif.
+
 ## Alur kerja bos
 
 1. Panel **Beri Tugas** — tulis judul + brief, pilih karyawan (ada saran otomatis berdasar
@@ -137,6 +142,6 @@ office/roster.py        # denah ruang + roster karyawan
 office/state.py         # persistensi JSON + cache
 office/github.py        # REST GitHub
 office/apps.py          # registri aplikasi Streamlit
-office/ui/              # ikon Material, karakter SVG, panggung isometrik, tema
-tests/                  # 104 pengujian (pytest)
+office/ui/              # ikon Material, karakter SVG, panggung 3D (Three.js) + denah isometrik, tema
+test/                   # pengujian otomatis (pytest)
 ```

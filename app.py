@@ -18,13 +18,11 @@ from office import apps as apps_mod
 from office import engine, github as gh
 from office.config import (
     APP_NAME,
-    APP_TAGLINE,
     PROVIDERS,
     PROVIDER_ORDER,
     VERSION,
     get_key,
     has_key,
-    read_secrets_file,
     write_secrets_file,
 )
 from office.icons import icon_svg, labeled, mat
@@ -46,10 +44,10 @@ from office.models_data import (
     TASK_REVIEW,
     TASK_WORKING,
 )
-from office.roster import ROSTER, ROOMS, ROOM_ORDER, suggested_employee
+from office.roster import ROOMS, ROOM_ORDER, suggested_employee
 from office.state import export_snapshot, load_config, load_state, reset_state, save_state, update_config
 from office.ui.characters import state_label
-from office.ui.office_view import render_office, room_legend
+from office.ui.office_view import render_office
 from office.ui.theme import bar, base_css, chip, progress_row, section, stat_block, theme as get_theme
 from office.ui.stage3d import render_stage_3d
 
@@ -107,6 +105,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(iframe) {
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(iframe) iframe {
   width: 100% !important; height: 100vh !important; border: 0; display: block;
+  position: relative; z-index: 2; /* di atas lapisan denah SVG (z-index 1) */
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
@@ -445,14 +444,29 @@ def stage_badges(state: dict[str, Any]) -> dict[str, int]:
 
 @st.fragment(run_every=2.0)
 def stage() -> None:
+    """Panggung full-screen: denah SVG sebagai lapisan dasar, panggung 3D di atasnya.
+
+    Denah SVG (``render_office``) selalu digambar supaya kantor tetap terlihat
+    bila komponen 3D tidak termuat (WebGL/komponen gagal, uji asap, mode cetak).
+    Komponen 3D (Three.js) dirender setelahnya sehingga menutupi denah saat aktif.
+    """
     state = S()
     engine.tick(state)
+    configuration = cfg()
+    st.markdown(
+        render_office(
+            state,
+            theme=configuration.get("theme", "night"),
+            selected_room=st.session_state.get("selected_room", ""),
+            selected_emp=st.session_state.get("selected_emp", ""),
+        ),
+        unsafe_allow_html=True,
+    )
     render_stage_3d(
         ROOMS,
         state.get("employees", {}),
-        boss_name=cfg().get("boss_name", "Bos"),
+        boss_name=configuration.get("boss_name", "Bos"),
         badges=stage_badges(state),
-        debug=True
     )
 
 # ----------------------------------------------------------------------------- HUD bar
@@ -1131,11 +1145,11 @@ def panel_settings() -> None:
 
 # ----------------------------------------------------------------------------- kerangka
 def main() -> None:
-    css()                      # anak 1 (style, disembunyikan CSS)
-    stage()                    # anak 2: panggung full-screen
-    top_bar()                  # anak 3: bar atas
-    bottom_bar()               # anak 4: bar ruang
-    drawer()                   # anak 5: panel fitur
+    css()                      # anak 1-2 (dua blok <style>, disembunyikan CSS)
+    stage()                    # anak 3: panggung full-screen (denah SVG + 3D)
+    top_bar()                  # anak 4: bar atas
+    bottom_bar()               # anak 5: bar bawah
+    drawer()                   # anak 6: panel fitur
 
 
 main()
