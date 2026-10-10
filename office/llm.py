@@ -16,9 +16,11 @@ from .config import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     HTTP_TIMEOUT,
+    KIND_CHAT,
     MAX_CONTEXT_CHARS,
     PROVIDERS,
     get_key,
+    provider_kind,
 )
 from .models import ALL_FALLBACK, MODELS, RETIRED, model_label, provider_of
 from .quality import clean_response, work_contract
@@ -282,7 +284,15 @@ def chat(
             f"Provider '{provider}' tidak terdaftar dalam konfigurasi."
         )
 
-    # 4. Siapkan endpoint dan payload permintaan.
+    # 4. Provider gambar/pencarian punya endpoint sendiri, bukan chat/completions.
+    kind = provider_kind(provider)
+    if kind != KIND_CHAT:
+        raise LLMError(
+            f"Model '{model}' bukan model chat (jenis keluaran: {kind}). "
+            f"Tugas gambar diproses office.imageai dan pencarian web lewat office.websearch."
+        )
+
+    # 5. Siapkan endpoint dan payload permintaan.
     url, label = _endpoint(provider)
 
     payload: dict[str, Any] = {
@@ -295,20 +305,20 @@ def chat(
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
-    # 5. Kirim permintaan ke provider.
+    # 6. Kirim permintaan ke provider.
     data = _post(url, _headers(provider), payload)
 
-    # 6. Periksa apakah provider mengembalikan teks.
+    # 7. Periksa apakah provider mengembalikan teks.
     response_text = _extract_text(data)
     if not response_text:
         raise LLMError(
             f"{label} membalas kosong untuk model '{model}'."
         )
 
-    # 7. Ambil informasi penggunaan token.
+    # 8. Ambil informasi penggunaan token.
     tokens_in, tokens_out = _usage(data)
 
-    # 8. Kembalikan hasil beserta identitas model dan provider.
+    # 9. Kembalikan hasil beserta identitas model dan provider.
     return LLMResult(
         text=clean_response(response_text),
         model=model,
@@ -348,6 +358,10 @@ def chat_with_fallback(
             notes.append(f"{candidate} dilewati (model sudah dimatikan provider)")
             continue
         candidate_provider = provider_of(candidate)
+        # Model gambar/pencarian tidak punya endpoint chat: lewati, jangan dicoba.
+        if provider_kind(candidate_provider) != KIND_CHAT:
+            notes.append(f"{candidate} dilewati (bukan model chat)")
+            continue
         if candidate_provider in blocked_providers:
             notes.append(f"{candidate} dilewati (provider {candidate_provider} tidak siap)")
             continue
@@ -386,6 +400,10 @@ def quick_reply(
 ) -> LLMResult:
     """Balasan singkat yang mengingat percakapan terbaru dengan karyawan."""
     model = model or emp.get("model", ALL_FALLBACK[0])
+    # Karyawan gambar/pencarian tetap bisa diajak mengobrol: pinjam model chat
+    # dari rantai fallback global supaya percakapan tidak pernah mati.
+    if model not in MODELS or provider_kind(provider_of(model)) != KIND_CHAT:
+        model = ALL_FALLBACK[0]
     messages: list[dict[str, str]] = [
         {"role": "system", "content": build_system_prompt(emp, company, boss) +
             "\nIni percakapan kantor, bukan tugas formal. Balas maksimal 3 kalimat, spesifik pada pertanyaan, dan jangan menambahkan Ringkasan untuk Bos."},
@@ -403,6 +421,16 @@ def quick_reply(
 # ----------------------------------------------------------------------------- diagnostik
 def test_key(provider: str, model: str) -> dict[str, Any]:
     """Kirim satu permintaan kecil untuk memastikan kunci & model benar-benar jalan."""
+    kind = provider_kind(provider)
+    if kind == "image":
+        from . import imageai  # import lokal: hindari siklus
+
+        return imageai.test_key(model)
+    if kind == "search":
+        from . import websearch  # import lokal: hindari siklus
+
+        return websearch.test_key(model)
+
     started = time.time()
     try:
         result = chat(
@@ -441,6 +469,7 @@ def provider_health() -> dict[str, dict[str, Any]]:
         first = next(iter(catalogue), "")
         out[provider] = {
             "label": meta["label"],
+            "kind": meta.get("kind", KIND_CHAT),
             "key_present": bool(get_key(provider)),
             "key_env": meta["key_env"],
             "base_url": meta["base_url"],

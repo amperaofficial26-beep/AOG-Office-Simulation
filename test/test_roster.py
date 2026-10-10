@@ -66,8 +66,28 @@ def test_setiap_karyawan_punya_kepribadian_dan_kebiasaan():
 
 def test_ruangan_terpakai_oleh_minimal_satu_karyawan():
     dipakai = {e.room for e in ROSTER}
-    for rid in ("code", "qa", "research", "design", "marketing", "ops", "data", "reception"):
+    for rid in (
+        "code", "qa", "research", "design", "marketing", "ops", "data", "reception",
+        "ai_image", "web_research",
+    ):
         assert rid in dipakai, f"ruang {rid} kosong tanpa karyawan"
+
+
+def test_karyawan_gambar_dan_riset_web_ada():
+    roles = {e.role: e for e in ROSTER}
+    assert roles["image_artist"].room == "ai_image"
+    assert roles["web_search"].room == "web_research"
+    assert roles["image_artist"].model.startswith("@cf/"), "karyawan gambar wajib memakai FLUX.1"
+    assert roles["web_search"].model.startswith("tavily-"), "karyawan riset web wajib memakai Tavily"
+
+
+def test_saran_karyawan_gambar_dan_riset_web():
+    assert suggested_employee("gambar") in {e.eid for e in ROSTER if e.role == "image_artist"}
+    assert suggested_employee("riset web") in {e.eid for e in ROSTER if e.role == "web_search"}
+    # Kata kunci di brief memperkuat saran meski bentuk keluarannya umum.
+    assert suggested_employee("riset", brief="cari di web sumber tren kompetitor terbaru") in {
+        e.eid for e in ROSTER if e.role in ("researcher", "web_search")
+    }
 
 
 def test_sinkronisasi_menambah_karyawan_baru():

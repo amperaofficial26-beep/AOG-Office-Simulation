@@ -475,6 +475,24 @@ ROSTER: tuple[Employee, ...] = (
         desk_index=0, skin="#F6C9A0", hair="#3B2416", shirt="#F59E0B", accent="#FEF9C3",
         hair_style="bun",
     ),
+    _emp(
+        "kirana", "Kirana Maheswari", "image_artist", "AI Image Artist", "Kepala Ruang AI Image",
+        "@cf/black-forest-labs/flux-1-schnell", "ai_image",
+        "Melihat brief sebagai komposisi warna; selalu menyimpan prompt final agar bisa diulang.",
+        "Prompt-nya saya rapikan dulu, Bos. Empat langkah render sudah cukup untuk draf pertama.",
+        ("Menyimpan prompt final tiap aset", "Suka komposisi 16:9", "Tidak mau ada teks di gambar"),
+        desk_index=0, skin="#E8B892", hair="#2A1B2E", shirt="#7C3AED", accent="#C4B5FD",
+        hair_style="long",
+    ),
+    _emp(
+        "wira", "Wira Santoso", "web_search", "Spesialis Pencarian Web", "Kepala Riset Web",
+        "tavily-search", "web_research",
+        "Tidak mau menulis satu kalimat pun tanpa tautan sumber di belakangnya.",
+        "Saya sisir web dulu, Bos. Setiap klaim nanti ada tautannya.",
+        ("Wajib ada tautan sumber", "Membaca tanggal terbit lebih dulu", "Suka membandingkan tiga sumber"),
+        desk_index=0, skin="#D9A077", hair="#171310", shirt="#0369A1", accent="#67E8F9",
+        glasses=True, hair_style="short",
+    ),
 )
 
 ROSTER_BY_ID: dict[str, Employee] = {e.eid: e for e in ROSTER}
@@ -492,6 +510,8 @@ ROLE_LABELS = {
     "security": "Spesialis Konten & Keamanan",
     "intern": "Anak Magang",
     "writer": "Penulis Konten",
+    "image_artist": "AI Image Artist",
+    "web_search": "Spesialis Pencarian Web",
 }
 
 # Karyawan yang paling cocok untuk tiap jenis tugas (dipakai fitur "sarankan karyawan").
@@ -499,6 +519,8 @@ ROLE_FOR_DELIVERABLE = {
     "kode": "engineer",
     "perbaikan bug": "qa",
     "riset": "researcher",
+    "riset web": "web_search",
+    "gambar": "image_artist",
     "artikel": "writer",
     "konten": "marketing",
     "desain": "designer",
@@ -512,14 +534,34 @@ ROLE_FOR_DELIVERABLE = {
 ROLE_AFFINITY: dict[str, tuple[str, ...]] = {
     "kode": ("engineer", "architect"),
     "perbaikan bug": ("engineer", "qa", "security"),
-    "riset": ("researcher", "analyst"),
+    "riset": ("researcher", "analyst", "web_search"),
+    "riset web": ("web_search", "researcher", "analyst"),
+    "gambar": ("image_artist", "designer", "marketing"),
     "artikel": ("writer", "marketing", "researcher"),
-    "konten": ("marketing", "writer"),
-    "desain": ("designer", "engineer"),
-    "laporan": ("analyst", "researcher"),
+    "konten": ("marketing", "writer", "image_artist"),
+    "desain": ("designer", "image_artist", "engineer"),
+    "laporan": ("analyst", "researcher", "web_search"),
     "deployment": ("ops", "engineer", "security"),
     "balasan pesan": ("reception", "marketing"),
     "dokumen": ("engineer", "architect", "researcher"),
+}
+
+# Istilah brief yang memperkuat saran karyawan tertentu.
+ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "architect": ("arsitektur", "schema", "skalabilitas"),
+    "qa": ("bug", "error", "test", "regresi"),
+    "security": ("aman", "security", "token", "vulnerability"),
+    "image_artist": ("gambar", "ilustrasi", "logo", "poster", "banner", "thumbnail", "ikon", "visual"),
+    "web_search": ("cari di web", "pencarian", "sumber", "berita", "tren", "kompetitor", "referensi"),
+}
+
+# Bobot koreksi kata kunci per jabatan (bukan pengganti pilihan bos).
+ROLE_KEYWORD_BOOST: dict[str, float] = {
+    "architect": 24.0,
+    "qa": 12.0,
+    "security": 20.0,
+    "image_artist": 20.0,
+    "web_search": 20.0,
 }
 
 
@@ -554,14 +596,11 @@ def rank_employees(
         if done + rejected:
             score += (done / (done + rejected) - 0.5) * 12.0
         # Sedikit koreksi dari istilah tugas; bukan pengganti pilihan bos.
-        if any(word in text for word in ("arsitektur", "schema", "skalabilitas")) and base.role == "architect":
-            score += 24
-        if any(word in text for word in ("bug", "error", "test", "regresi")) and base.role == "qa":
-            score += 12
+        keywords = ROLE_KEYWORDS.get(base.role, ())
+        if keywords and any(word in text for word in keywords):
+            score += ROLE_KEYWORD_BOOST.get(base.role, 12.0)
         if any(word in text for word in ("api", "backend", "database")) and base.eid == "bimo":
             score += 12
-        if any(word in text for word in ("aman", "security", "token", "vulnerability")) and base.role == "security":
-            score += 20
         scored.append((base.eid, round(score, 2)))
     return sorted(scored, key=lambda row: (-row[1], row[0]))
 

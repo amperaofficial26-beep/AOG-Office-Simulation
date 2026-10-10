@@ -33,7 +33,14 @@ GROQ_API_KEY = "gsk_..."
 OPENROUTER_API_KEY = "sk-or-v1-..."
 AION_API_KEY = "aion_..."
 GITHUB_TOKEN = "github_pat_..."   # opsional: membuka integrasi GitHub live
+
+CLOUDFLARE_API_KEY = "cf_..."     # karyawan AI Image (FLUX.1)
+CLOUDFLARE_ACCOUNT_ID = ""        # opsional: dicari otomatis dari kunci
+TAVILY_API_KEY = "tvly-..."       # karyawan riset web
 ```
+
+Semua kunci juga bisa ditempel langsung dari panel **Pengaturan → "Isi kunci langsung di
+sini"** (tersimpan ke `.streamlit/secrets.toml` di server, tidak ikut ter-commit).
 
 Tanpa kunci sekalipun kantor tetap hidup (karakter berjalan, tugas masuk antrean),
 tetapi karyawan belum bisa memanggil model sungguhan sampai kunci diisi.
@@ -53,9 +60,39 @@ ternyata mati otomatis dinonaktifkan dan dipindah ke pengganti.
   `poolside/laguna-*` (31 Okt), `z-ai/glm-4.5/4.7` (31 Des).
 * **Aion Labs** (`https://api.aionlabs.ai/v1`) — 6 model live: `aion-3.5`, `aion-3.5-mini`,
   `aion-3.0`, `aion-3.0-mini`, `aion-2.0`, `aion-rp-llama-3.1-8b`.
+* **Cloudflare Workers AI** — keluaran **gambar**, bukan chat. Dipakai:
+  `@cf/black-forest-labs/flux-1-schnell` (gratis, 4 langkah),
+  `@cf/black-forest-labs/flux-1-dev` (aset final), dan
+  `@cf/bytedance/stable-diffusion-xl-lightning` (cadangan gratis).
+* **Tavily** — keluaran **pencarian web**. Dipakai: `tavily-search` (1 kredit) dan
+  `tavily-search-advanced` (2 kredit) untuk penelusuran lebih dalam.
 
 Setiap karyawan punya model utama + rantai **fallback** (role → global), jadi satu model
-mati tidak pernah membuat karyawan macet.
+mati tidak pernah membuat karyawan macet. Rantai fallback dijaga per **jenis keluaran**:
+model gambar hanya jatuh ke model gambar, model pencarian hanya ke model pencarian, jadi
+tugas gambar tidak pernah berakhir di endpoint chat.
+
+## Karyawan non-chat: gambar dan riset web
+
+Dua karyawan bekerja dengan jenis keluaran yang berbeda dari chat, dan mesin tugas
+(`office/engine.py`) memilih jalur pemanggilan berdasarkan **modality** model:
+
+| Ruang | Karyawan | Kunci | Endpoint | Hasil |
+| --- | --- | --- | --- | --- |
+| Ruang AI Image | Kirana Maheswari | `CLOUDFLARE_API_KEY` | `POST /accounts/{account_id}/ai/run/@cf/black-forest-labs/flux-1-schnell` | PNG di `data/assets`, tampil di kartu tugas |
+| Ruang Web Research | Wira Santoso | `TAVILY_API_KEY` | `POST https://api.tavily.com/search` | Laporan bersumber + `task["sources"]` |
+
+* **Cukup satu kunci Cloudflare.** `CLOUDFLARE_ACCOUNT_ID` opsional — bila kosong, aplikasi
+  memanggil `GET /client/v4/accounts` dan memakai akun pertama yang bisa diakses token itu
+  (hasilnya di-cache 1 jam). Isi manual hanya bila penemuan otomatis gagal.
+* **Jumlah langkah render dijepit otomatis** ke rentang tiap model (Schnell 4–8, Dev 12–30,
+  SDXL Lightning 1–4) supaya API tidak menolak permintaan.
+* **Sumber riset tidak pernah dikarang.** Semua URL pada laporan berasal dari balasan
+  Tavily; quality gate mengurangi skor bila tidak ada satu pun tautan yang bisa diverifikasi.
+* **Revisi tetap kontekstual.** Untuk tugas gambar, prompt versi sebelumnya diambil dari
+  hasil yang ditolak dan dikirim ulang bersama catatan bos.
+* Karyawan gambar/pencarian tetap bisa **diajak mengobrol** — percakapan meminjam model chat
+  dari rantai fallback global.
 
 ## Mesin kerja v3
 
@@ -94,13 +131,19 @@ Pembaruan v3 memperkuat logika internal tanpa mengganti desain UI:
 | Lala Anindya | Resepsionis | Ruang Penerima Pesan | openrouter | `liquid/lfm-2.5-2.6b:free` |
 | Gilang Ramadhan | Spesialis Konten & Keamanan | Ruang QA | groq | `openai/gpt-oss-safeguard-20b` |
 | Putri Anggraini | Anak Magang | Pantry dan Ruang Santai | openrouter | `apodex/apodex-1.1-mini:free` |
+| Kirana Maheswari | AI Image Artist | Ruang AI Image | cloudflare | `@cf/black-forest-labs/flux-1-schnell` |
+| Wira Santoso | Spesialis Pencarian Web | Ruang Web Research | tavily | `tavily-search` |
 
 Model tiap karyawan bisa diganti kapan saja dari panel **Karyawan**.
 
 ## Ruangan
 
 Ruang Bos · Ruang Kode · Ruang Riset · Ruang Desain · Ruang Marketing ·
-Ruang Penerima Pesan · Ruang QA · Ruang Data · Ruang DevOps · Pantry dan Ruang Santai.
+Ruang Penerima Pesan · Ruang QA · Ruang Data · Ruang DevOps · Pantry dan Ruang Santai ·
+Ruang Dokumentasi · Ruang Penulisan · **Ruang AI Image** · **Ruang Web Research** ·
+Ruang Keamanan Siber · Ruang Database · Ruang Otomasi · Ruang Produk · Ruang Strategi ·
+Ruang Rapat · Perpustakaan AI · Ruang Pelatihan · Ruang Monitoring ·
+Ruang Prompt Engineering · Ruang Integrasi AI.
 
 Karakter tidak kaku: mereka **berjalan** antar ruang, **mengetik** saat bekerja,
 **ngopi / main game / tidur** saat santai, berkedip, bernapas, dan memakai properti sesuai

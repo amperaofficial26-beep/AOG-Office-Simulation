@@ -9,6 +9,7 @@ Jalankan:  streamlit run app.py
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -21,6 +22,7 @@ from office.config import (
     PROVIDERS,
     PROVIDER_ORDER,
     VERSION,
+    get_account_id,
     get_key,
     has_key,
     write_secrets_file,
@@ -54,7 +56,7 @@ from office.ui.stage3d import render_stage_3d
 st.set_page_config(page_title=APP_NAME, layout="wide", initial_sidebar_state="collapsed")
 
 DELIVERABLES = [
-    "kode", "perbaikan bug", "riset", "artikel", "konten",
+    "kode", "perbaikan bug", "riset", "riset web", "gambar", "artikel", "konten",
     "desain", "laporan", "deployment", "balasan pesan", "dokumen",
 ]
 PRIORITIES = ["rendah", "normal", "tinggi"]
@@ -756,6 +758,11 @@ def task_card(state: dict[str, Any], task: dict[str, Any], approve_key: str) -> 
     )
     if task.get("error"):
         st.error(f"Model gagal: {task['error']}")
+    for path in task.get("files") or []:
+        if os.path.isfile(path):
+            st.image(path, caption=f"Hasil render: {os.path.basename(path)}")
+        else:
+            st.caption(f"Berkas hasil render tidak ditemukan lagi: {os.path.basename(str(path))}")
     if task.get("result"):
         st.markdown(f'<div class="task-result">{task["result"]}</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
@@ -1068,12 +1075,22 @@ def panel_models() -> None:
         tone = "ok" if info["key_present"] else "bad"
         prov_title = f"<b>{meta['label']}</b>"
         catalog_chip = chip(f"{info['catalog_count']} model", "muted", "memory", 11)
+        kind_icon = {"image": "image", "search": "travel_explore"}.get(info.get("kind", "chat"), "forum")
+        kind_chip = chip(info.get("kind", "chat"), "muted", kind_icon, 11)
+        account_chip = ""
+        if provider == "cloudflare":
+            account = get_account_id()
+            account_chip = (
+                chip(f"akun {account[:8]}", "ok", "badge", 11)
+                if account
+                else chip("akun dicari otomatis", "muted", "search", 11)
+            )
         st.markdown(
             f'<div class="card" style="border-top:3px solid {meta["color"]}">'
             f'{labeled("key" if info["key_present"] else "lock", prov_title, 16)}'
             f'<div class="small" style="margin-top:4px">{meta["tagline"]}</div>'
             f'<div class="row" style="margin-top:6px">{chip(info["key_env"], tone, "key", 11)}'
-            f'{catalog_chip}</div>'
+            f'{catalog_chip}{kind_chip}{account_chip}</div>'
             f'<div class="tiny" style="margin-top:6px">Gratis: {meta["free_tier"]}</div></div>',
             unsafe_allow_html=True,
         )
@@ -1086,17 +1103,26 @@ def panel_models() -> None:
                     f"{PROVIDERS[provider]['label']}: {len(res['ids'])} model terdaftar, "
                     f"{len(res['live'])} hidup." + (f" Mati: {', '.join(res['dead'])}" if res.get("dead") else "")
                 )
+            elif res.get("skipped"):
+                st.info(f"{PROVIDERS[provider]['label']}: {res['error']} Katalog lokal dipakai.")
             else:
                 st.warning(f"{PROVIDERS[provider]['label']}: {res['error'] or 'tidak bisa diverifikasi'}")
 
     st.markdown(section("Uji panggilan nyata", "bolt"), unsafe_allow_html=True)
-    test_provider = st.selectbox("Provider", PROVIDER_ORDER, key="test_provider")
+    test_provider = st.selectbox(
+        "Provider",
+        PROVIDER_ORDER,
+        format_func=lambda p: f"{PROVIDERS[p]['label']} ({PROVIDERS[p].get('kind', 'chat')})",
+        key="test_provider",
+    )
     test_model = st.selectbox("Model", list(models_for(test_provider)), key="test_model")
     if st.button("Uji sekarang", type="primary", icon=mat("bolt"), use_container_width=True):
         with st.spinner("Menghubungi model..."):
             result = test_key(test_provider, test_model)
         if result["ok"]:
             st.success(f"Berhasil dalam {result['latency']} detik. Balasan: {result['reply']}")
+            if result.get("file"):
+                st.image(result["file"], caption="Gambar uji dari Cloudflare Workers AI")
         else:
             st.error(result["error"])
 
@@ -1108,6 +1134,7 @@ def panel_models() -> None:
             {
                 "model": mid,
                 "provider": PROVIDERS[meta["provider"]]["label"],
+                "keluaran": PROVIDERS[meta["provider"]].get("kind", "chat"),
                 "konteks": f"{meta['context'] // 1000}K",
                 "biaya": meta["cost"],
                 "live": "hidup" if status.get(mid) else "belum terverifikasi",
@@ -1143,11 +1170,37 @@ def panel_settings() -> None:
         sc = st.columns(2)
         g = sc[0].text_input("GROQ_API_KEY", type="password", placeholder="gsk_...")
         o = sc[0].text_input("OPENROUTER_API_KEY", type="password", placeholder="sk-or-v1-...")
-        a = sc[1].text_input("AION_API_KEY", type="password", placeholder="aion_...")
-        t = sc[1].text_input("GITHUB_TOKEN", type="password", placeholder="github_pat_...")
+        a = sc[0].text_input("AION_API_KEY", type="password", placeholder="aion_...")
+        t = sc[0].text_input("GITHUB_TOKEN", type="password", placeholder="github_pat_...")
+        cf = sc[1].text_input(
+            "CLOUDFLARE_API_KEY",
+            type="password",
+            placeholder="API token Cloudflare untuk FLUX.1 (Ruang AI Image)",
+            help="Workers AI: cukup token dengan izin Workers AI Write. Account id dicari otomatis bila kosong.",
+        )
+        cf_account = sc[1].text_input(
+            "CLOUDFLARE_ACCOUNT_ID",
+            type="password",
+            placeholder="opsional: 32 karakter hex",
+            help="Isi hanya bila penemuan otomatis akun gagal.",
+        )
+        tv = sc[1].text_input(
+            "TAVILY_API_KEY",
+            type="password",
+            placeholder="tvly-... (Ruang Web Research)",
+            help="Dipakai karyawan Spesialis Pencarian Web untuk riset bersumber.",
+        )
         if st.form_submit_button("Simpan kunci", type="primary", icon=mat("key"), use_container_width=True):
             written = write_secrets_file(
-                {"GROQ_API_KEY": g, "OPENROUTER_API_KEY": o, "AION_API_KEY": a, "GITHUB_TOKEN": t}
+                {
+                    "GROQ_API_KEY": g,
+                    "OPENROUTER_API_KEY": o,
+                    "AION_API_KEY": a,
+                    "GITHUB_TOKEN": t,
+                    "CLOUDFLARE_API_KEY": cf,
+                    "CLOUDFLARE_ACCOUNT_ID": cf_account,
+                    "TAVILY_API_KEY": tv,
+                }
             )
             if written:
                 toast(f"Kunci disimpan: {', '.join(written)}", "key")
@@ -1161,9 +1214,17 @@ def panel_settings() -> None:
         label = meta["label"] if meta else "GitHub"
         env = meta["key_env"] if meta else "GITHUB_TOKEN"
         tone = "ok" if has_key(provider) else "bad"
+        extra = ""
+        if provider == "cloudflare":
+            account = get_account_id()
+            extra = (
+                f'{chip(f"akun {account[:8]}", "ok", "badge", 11)}'
+                if account
+                else f'{chip("akun dicari otomatis", "muted", "search", 11)}'
+            )
         st.markdown(
             f'<div class="card soft">{labeled("key" if has_key(provider) else "lock", label, 15)} '
-            f'{chip("terisi" if has_key(provider) else "kosong", tone, "", 11)}'
+            f'{chip("terisi" if has_key(provider) else "kosong", tone, "", 11)}{extra}'
             f'<div class="tiny mono">{env}</div></div>',
             unsafe_allow_html=True,
         )

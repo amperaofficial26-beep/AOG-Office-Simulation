@@ -179,6 +179,7 @@ class Task:
     duration: float = 0.0
     rating: int = 0
     files: list[str] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
     repo_context: str = ""
     history: list[dict[str, Any]] = field(default_factory=list)
     revision_history: list[dict[str, Any]] = field(default_factory=list)
@@ -195,6 +196,7 @@ class Task:
         known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         data = {k: v for k, v in raw.items() if k in known}
         data.setdefault("files", [])
+        data.setdefault("sources", [])
         data.setdefault("history", [])
         data.setdefault("revision_history", [])
         data.setdefault("quality", {})

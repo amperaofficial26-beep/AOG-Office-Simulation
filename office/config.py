@@ -21,6 +21,9 @@ SECRET_KEYS = {
     "groq": "GROQ_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "aion": "AION_API_KEY",
+    "cloudflare": "CLOUDFLARE_API_KEY",
+    "cloudflare_account": "CLOUDFLARE_ACCOUNT_ID",
+    "tavily": "TAVILY_API_KEY",
     "github": "GITHUB_TOKEN",
 }
 
@@ -29,6 +32,9 @@ SECRET_ALIASES = {
     "openrouter": ["OPENROUTER_API_KEY", "OPENROUTER_KEY", "OPEN_ROUTER_API_KEY"],
     "aion": ["AION_API_KEY", "AION_LABS_API_KEY", "AIONLABS_API_KEY"],
     "groq": ["GROQ_API_KEY", "GROQ_KEY"],
+    "cloudflare": ["CLOUDFLARE_API_KEY", "CLOUDFLARE_API_TOKEN", "CF_API_TOKEN", "CLOUDFLARE_TOKEN"],
+    "cloudflare_account": ["CLOUDFLARE_ACCOUNT_ID", "CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT"],
+    "tavily": ["TAVILY_API_KEY", "TAVILY_KEY", "TAVILY_API_TOKEN"],
     "github": ["GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PAT"],
 }
 
@@ -56,6 +62,15 @@ def get_key(provider: str) -> str:
 
 def has_key(provider: str) -> bool:
     return bool(get_key(provider))
+
+
+def get_account_id() -> str:
+    """CLOUDFLARE_ACCOUNT_ID untuk memanggil Workers AI (opsional).
+
+    Bila kosong, `office.imageai.resolve_account_id` mencari akun pertama yang
+    bisa diakses kunci tersebut, jadi bos cukup menempel satu API key saja.
+    """
+    return get_key("cloudflare_account")
 
 
 def _escape_toml(value: str) -> str:
@@ -102,9 +117,18 @@ def write_secrets_file(values: dict[str, str]) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- provider
+# `kind` menentukan jenis keluaran provider:
+#   chat   -> teks (chat/completions OpenAI-compatible)
+#   image  -> berkas gambar (Cloudflare Workers AI / FLUX.1)
+#   search -> hasil pencarian web (Tavily)
+KIND_CHAT = "chat"
+KIND_IMAGE = "image"
+KIND_SEARCH = "search"
+
 PROVIDERS: dict[str, dict] = {
     "groq": {
         "label": "Groq",
+        "kind": KIND_CHAT,
         "base_url": "https://api.groq.com/openai/v1",
         "models_url": "https://api.groq.com/openai/v1/models",
         "key_env": "GROQ_API_KEY",
@@ -114,6 +138,7 @@ PROVIDERS: dict[str, dict] = {
     },
     "openrouter": {
         "label": "OpenRouter",
+        "kind": KIND_CHAT,
         "base_url": "https://openrouter.ai/api/v1",
         "models_url": "https://openrouter.ai/api/v1/models",
         "key_env": "OPENROUTER_API_KEY",
@@ -123,6 +148,7 @@ PROVIDERS: dict[str, dict] = {
     },
     "aion": {
         "label": "Aion Labs",
+        "kind": KIND_CHAT,
         "base_url": "https://api.aionlabs.ai/v1",
         "models_url": "https://api.aionlabs.ai/v1/models",
         "key_env": "AION_API_KEY",
@@ -130,9 +156,38 @@ PROVIDERS: dict[str, dict] = {
         "tagline": "Model roleplay & narasi — tim kreatif dan humas",
         "free_tier": "15 req/menit · 20K token/hari",
     },
+    "cloudflare": {
+        "label": "Cloudflare Workers AI",
+        "kind": KIND_IMAGE,
+        "base_url": "https://api.cloudflare.com/client/v4",
+        # {account_id} diisi saat runtime (dari secret atau penemuan otomatis).
+        "models_url": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/models/search",
+        "key_env": "CLOUDFLARE_API_KEY",
+        "color": "#F6821F",
+        "tagline": "FLUX.1 di edge — pelukis aset gambar untuk kantor",
+        "free_tier": "10.000 neuron/hari gratis · FLUX.1 Schnell cukup 4 langkah",
+    },
+    "tavily": {
+        "label": "Tavily",
+        "kind": KIND_SEARCH,
+        "base_url": "https://api.tavily.com",
+        # Tavily tidak punya katalog model publik; katalognya ada di MODELS.
+        "models_url": "",
+        "key_env": "TAVILY_API_KEY",
+        "color": "#0EA5E9",
+        "tagline": "Pencarian web berbayar-hasil — mata dan telinga ruang riset",
+        "free_tier": "1.000 kredit/bulan gratis · basic 1 kredit, advanced 2 kredit",
+    },
 }
 
-PROVIDER_ORDER = ["groq", "openrouter", "aion"]
+# Provider chat lebih dulu supaya indeks default UI lama tidak bergeser.
+PROVIDER_ORDER = ["groq", "openrouter", "aion", "cloudflare", "tavily"]
+CHAT_PROVIDER_ORDER = [p for p in PROVIDER_ORDER if PROVIDERS[p].get("kind") == KIND_CHAT]
+
+
+def provider_kind(provider: str) -> str:
+    """Jenis keluaran sebuah provider: chat, image, atau search."""
+    return str(PROVIDERS.get(provider, {}).get("kind", KIND_CHAT))
 
 # ----------------------------------------------------------------------------- batasan
 DEFAULT_TEMPERATURE = 0.7
@@ -149,6 +204,7 @@ SECRETS_FILE = os.path.join(ROOT_DIR, ".streamlit", "secrets.toml")
 STATE_FILE = os.path.join(DATA_DIR, "office_state.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 EXPORT_DIR = os.path.join(DATA_DIR, "exports")
+ASSET_DIR = os.path.join(DATA_DIR, "assets")  # hasil gambar AI (FLUX.1)
 WATCHDOG_FILE = os.path.join(DATA_DIR, "watchdog.json")
 GITHUB_API = "https://api.github.com"
 
@@ -159,8 +215,13 @@ STREAMLIT_APP_URLS = {
     "Room-Chat-Ampera-Group": "https://room-chat-ampera-group.streamlit.app/",
 }
 
-for _d in (DATA_DIR, EXPORT_DIR):
+for _d in (DATA_DIR, EXPORT_DIR, ASSET_DIR):
     os.makedirs(_d, exist_ok=True)
+
+
+def asset_dir() -> str:
+    """Direktori penyimpan hasil gambar AI (dibaca saat dipanggil, bukan import)."""
+    return ASSET_DIR
 
 # Nama boss (bisa diubah dari UI, disimpan di config.json)
 DEFAULT_BOSS_NAME = "Boss Ampera"
