@@ -268,8 +268,8 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton b
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button svg,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button .material-symbols-outlined {
     font-size: 28px !important;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
   }
 }
 """
