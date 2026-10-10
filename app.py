@@ -267,7 +267,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin:
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button span,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button svg,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button .material-symbols-outlined {
-    font-size: 22px !important;
+    font-size: 28px !important;
     width: 24px;
     height: 24px;
   }
