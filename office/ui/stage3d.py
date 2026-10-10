@@ -137,25 +137,29 @@ def _roster_helpers():
         return {}, None, None
 
 
-def _signature(out_rooms: list[dict[str, Any]], out_emps: list[dict[str, Any]], quality: str) -> str:
-    """Sidik jari bagian STATIS (tata letak + penampilan). Berubah => iframe dimuat ulang.
+def _signature(out_rooms: list[dict[str, Any]], out_emps: list[dict[str, Any]], quality: str) -> tuple[str, dict[str, str]]:
+    """Sidik jari bagian yang menuntut scene DIBANGUN ULANG: denah ruangan + penampilan karyawan.
 
-    Aktivitas, target jalan, model, dan badge sengaja TIDAK ikut: itu dikirim lewat pesan.
+    Nama, ruangan, posisi meja, aktivitas, target jalan, model, dan badge sengaja TIDAK ikut:
+    semuanya dikirim lewat pesan dan diterapkan tanpa muat ulang iframe.
+    Mengembalikan (sidik jari gabungan, sidik jari per bagian) - bagian dipakai untuk diagnosis.
     """
-    stable = {
-        "q": quality,
-        "rooms": [
+    def h(obj: Any) -> str:
+        raw = json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+
+    parts = {
+        "kualitas": h(quality),
+        "denah": h([
             {k: r[k] for k in ("rid", "name", "color", "gx", "gy", "gw", "gh", "furniture", "spots", "lounge")}
             for r in out_rooms
-        ],
-        "emps": [
-            {k: e[k] for k in ("eid", "name", "room", "deskx", "deskz",
-                               "skin", "hair", "shirt", "accent", "glasses", "hair_style")}
+        ]),
+        "karyawan": h([
+            {k: e[k] for k in ("eid", "skin", "hair", "shirt", "accent", "glasses", "hair_style")}
             for e in out_emps
-        ],
+        ]),
     }
-    raw = json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:12]
+    return h(parts), parts
 
 
 def build_payload(
@@ -241,12 +245,14 @@ def build_payload(
             }
         )
     q = "low" if quality == "low" else "high"
+    sig, parts = _signature(out_rooms, out_emps, q)
     return {
         "rooms": out_rooms,
         "employees": out_emps,
         "quality": q,
         "badges": {r["rid"]: r["badge"] for r in out_rooms},
-        "sig": _signature(out_rooms, out_emps, q),
+        "sig": sig,
+        "parts": parts,
     }
 
 
@@ -401,8 +407,8 @@ canvas{display:block;cursor:grab}
 "use strict";
 /* EMBED = data tertanam (mode cadangan/pratinjau). null = mode komponen: data datang lewat pesan. */
 var EMBED=__DATA__;
-var booted=false,bootSig=null,applyFn=null,nUpd=0,nBoot=0,dbgOn=false,dbgVer="";
-function showDbg(){var d=document.getElementById("dbg");if(!d)return;d.style.display=dbgOn?"block":"none";if(dbgOn)d.textContent=dbgVer+" | boot "+nBoot+" | upd "+nUpd;}
+var booted=false,bootSig=null,bootParts=null,applyFn=null,nUpd=0,nBoot=0,dbgOn=false,dbgVer="",dbgWhy="";
+function showDbg(){var d=document.getElementById("dbg");if(!d)return;d.style.display=dbgOn?"block":"none";if(dbgOn)d.textContent=dbgVer+" | boot "+nBoot+" | upd "+nUpd+(dbgWhy?" | muat ulang: "+dbgWhy:"");}
 function showErr(m){var e=document.getElementById("err");e.textContent=m;e.style.display="block";}
 
 function boot(D){
@@ -782,6 +788,7 @@ function applyDyn(P){
     var n=map[c.e.eid];if(!n)return;
     var e=c.e;
     e.activity=n.activity;e.label=n.label;e.model=n.model;e.role=n.role;e.face=n.face;
+    e.name=n.name;e.room=n.room;e.deskx=n.deskx;e.deskz=n.deskz;
     e.tx=n.tx;e.tz=n.tz;c.tx=n.tx;c.tz=n.tz;
   });
   var b=P.badges||{};
@@ -947,11 +954,16 @@ window.addEventListener("message",function(ev){
   setFrameHeight(P.height);
   dbgOn=!!P.debug;dbgVer=P.version||"";
   if(!booted){
-    booted=true;bootSig=P.sig;
+    booted=true;bootSig=P.sig;bootParts=P.parts||{};
+    try{dbgWhy=window.sessionStorage.getItem("aog3d_why")||"";}catch(err){dbgWhy="";}
     try{nBoot=(+window.sessionStorage.getItem("aog3d_boots")||0)+1;window.sessionStorage.setItem("aog3d_boots",String(nBoot));}catch(err){nBoot=1;}
     boot(P);showDbg();return;
   }
-  if(P.sig!==bootSig&&safeReload())return;
+  if(P.sig!==bootSig){
+    var diff=[];Object.keys(P.parts||{}).forEach(function(k){if((bootParts||{})[k]!==P.parts[k])diff.push(k);});
+    try{window.sessionStorage.setItem("aog3d_why",diff.join(",")||"sig");}catch(err){}
+    if(safeReload())return;
+  }
   nUpd++;showDbg();
   if(applyFn)applyFn(P);
 });
