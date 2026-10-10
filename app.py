@@ -120,12 +120,41 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
 }
 /* bar bawah ala "liquid navigation": pil gelap melayang di tengah */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
-  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
-  width: fit-content; max-width: calc(100vw - 16px);
-  background: linear-gradient(90deg, #FF6EC7, #7AFCFF, #FFF27A, #8CFF7A, #FF9E6E, #B28CFF);
-  background-size: 200% 200%; animation: hud-gradient 6s ease infinite alternate;
-  border-radius: 50px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
-  padding: 26px 16px 10px !important; overflow-x: auto; scrollbar-width: none;
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+
+  width: fit-content;
+  max-width: calc(100vw - 16px);
+
+  /* Gradient lebih gelap dan elegan */
+  background: linear-gradient(
+    90deg,
+    #B58A36 0%,
+    #387D50 25%,
+    #286F76 45%,
+    #B96F48 70%,
+    #A85578 100%
+  );
+
+  background-size: 200% 200%;
+  animation: hud-gradient 6s ease infinite alternate;
+
+  /* Garis tepi mengikuti bentuk kapsul */
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 50px;
+
+  /* Bayangan lebih lembut */
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.28);
+
+  box-sizing: border-box;
+  padding: 26px 16px 10px !important;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
   flex-wrap: nowrap !important; width: max-content; gap: 6px !important;
