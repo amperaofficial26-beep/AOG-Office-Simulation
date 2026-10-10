@@ -283,6 +283,7 @@ def stage() -> None:
         state.get("employees", {}),
         boss_name=cfg().get("boss_name", "Bos"),
         badges=stage_badges(state),
+        debug=True
     )
 
 # ----------------------------------------------------------------------------- HUD bar
