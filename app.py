@@ -119,14 +119,18 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
   position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
   width: fit-content; max-width: calc(100vw - 16px);
   background: #15151D; border-radius: 10px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
-  padding: 8px 10px !important; overflow-x: auto; scrollbar-width: none;
+  padding: 26px 12px 8px !important; overflow-x: auto; scrollbar-width: none;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
   flex-wrap: nowrap !important; width: max-content; gap: 6px !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"],
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="column"] {
-  width: auto !important; min-width: 44px; flex: 0 0 auto !important;
+  width: 48px !important; min-width: 48px; flex: 0 0 48px !important;
+  display: flex; justify-content: center;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
+  align-items: center !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
   position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
@@ -183,14 +187,21 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton b
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
   width: 44px; height: 44px; border-radius: 50%; background: transparent;
   border: none; box-shadow: none; color: #FFFFFF;
+  transition: transform .35s cubic-bezier(.34,1.56,.64,1), background .25s, box-shadow .25s;
 }
+/* hover: ikon naik keluar dari bar, lingkaran putih mengambang terpisah */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button:hover {
-  background: rgba(255,255,255,.12); color: #FFFFFF; border: none;
+  background: #FFFFFF; color: #15151D; border: none;
+  transform: translateY(-20px); box-shadow: 0 10px 18px rgba(0,0,0,.35);
 }
 /* item aktif: lingkaran putih seperti gelembung cair */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[kind="primary"],
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[data-testid="stBaseButton-primary"] {
   background: #FFFFFF; color: #15151D; border: none;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[kind="primary"]:hover,
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[data-testid="stBaseButton-primary"]:hover {
+  transform: translateY(-20px);
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) p,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin: 0; }
@@ -323,14 +334,13 @@ def top_bar() -> None:
 def bottom_bar() -> None:
     """Semua tombol fitur ada di bawah: fitur dulu, lalu tombol ruang."""
     summ = engine.summary(S())
+    st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
     fitur = [("fitur", slug, icon_name, judul) for slug, icon_name, judul in TOPBAR]
     ruang = [("ruang", rid, ROOMS[rid].icon, ROOMS[rid].name) for rid in ROOM_ORDER]
     semua = fitur + ruang
     cols = st.columns(len(semua), gap="small", vertical_alignment="center")
     for i, (col, (jenis, kunci, icon_name, judul)) in enumerate(zip(cols, semua)):
         with col:
-            if i == 0:
-                st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
             if jenis == "fitur":
                 badge = ""
                 if kunci == "approval" and summ["pending"]:
