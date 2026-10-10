@@ -114,11 +114,17 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
   padding: 6px 10px !important;
 }
+@keyframes hud-gradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
 /* bar bawah ala "liquid navigation": pil gelap melayang di tengah */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
   position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
   width: fit-content; max-width: calc(100vw - 16px);
-  background: #15151D; border-radius: 50px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
+  background: linear-gradient(90deg, #FF6EC7, #7AFCFF, #FFF27A, #8CFF7A, #FF9E6E, #B28CFF);
+  background-size: 200% 200%; animation: hud-gradient 6s ease infinite alternate;
+  border-radius: 50px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
   padding: 26px 16px 10px !important; overflow-x: auto; scrollbar-width: none;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
