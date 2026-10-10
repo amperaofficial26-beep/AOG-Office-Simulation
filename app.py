@@ -114,14 +114,22 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) {
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
   padding: 6px 10px !important;
 }
+/* bar bawah ala "liquid navigation": pil gelap melayang di tengah */
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(10px); border-top: 1px solid var(--line);
-  padding: 6px 10px !important; overflow-x: auto;
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
+  width: fit-content; max-width: calc(100vw - 16px);
+  background: #15151D; border-radius: 10px; box-shadow: 0 15px 25px rgba(0,0,0,.2);
+  padding: 8px 10px !important; overflow-x: auto; scrollbar-width: none;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap !important; width: max-content; gap: 6px !important;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"],
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="column"] {
+  width: auto !important; min-width: 44px; flex: 0 0 auto !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
-  position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
+  position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
   width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
@@ -149,7 +157,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) [data-test
     padding: 6px 10px !important; overflow-x: auto;
   }
   div[data-testid="stMainBlockContainer"] > div > div:nth-child(6) {
-    position: fixed; top: 54px; right: 8px; bottom: 58px; z-index: 40;
+    position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
     width: min(560px, 96%); overflow-y: auto; overflow-x: hidden;
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px;
@@ -172,6 +180,18 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton b
   width: 40px; height: 40px; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
 }
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button {
+  width: 44px; height: 44px; border-radius: 50%; background: transparent;
+  border: none; box-shadow: none; color: #FFFFFF;
+}
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button:hover {
+  background: rgba(255,255,255,.12); color: #FFFFFF; border: none;
+}
+/* item aktif: lingkaran putih seperti gelembung cair */
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[kind="primary"],
+div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button[data-testid="stBaseButton-primary"] {
+  background: #FFFFFF; color: #15151D; border: none;
+}
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) p,
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin: 0; }
 .hud-bottom { height: 0; }
@@ -186,7 +206,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) p { margin:
 @media (max-width: 720px) {
   div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) { top: 50px; bottom: 54px; }
   div[data-testid="stMainBlockContainer"] > div > div:has(.hud-top) .stButton button,
-  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button { width: 34px; height: 34px; }
+  div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) .stButton button { width: 40px; height: 40px; }
   .brand-line .tiny { display: none; }
 }
 
@@ -291,53 +311,54 @@ def top_bar() -> None:
     state = S()
     configuration = cfg()
     summ = engine.summary(state)
-    cols = st.columns([3] + [1] * len(TOPBAR), gap="small", vertical_alignment="center")
-    with cols[0]:
-        st.markdown(
-            f'<div class="brand-line hud-top">{icon_svg("apartment", 20, "var(--accent)")}'
-            f'<div><b>{APP_NAME}</b><div class="tiny">{configuration.get("boss_name", "Bos")} · '
-            f'hari ke-{summ["day"]} · {chip(str(summ["pending"]), "warn", "hourglass_bottom", 11)} '
-            f'{chip(str(summ["inbox_unread"]), "bad" if summ["inbox_unread"] else "muted", "mark_chat_unread", 11)}</div></div></div>',
-            unsafe_allow_html=True,
-        )
-    for col, (slug, icon_name, judul) in zip(cols[1:], TOPBAR):
-        with col:
-            badge = ""
-            if slug == "approval" and summ["pending"]:
-                badge = f" ({summ['pending']})"
-            if slug == "inbox" and summ["inbox_unread"]:
-                badge = f" ({summ['inbox_unread']})"
-            aktif = st.session_state.get("drawer") == slug
-            if st.button(
-                " ",
-                key=f"tb_{slug}",
-                icon=mat(icon_name),
-                help=f"{judul}{badge}",
-                type="primary" if aktif else "secondary",
-                use_container_width=True,
-            ):
-                open_drawer(None if aktif else slug)
+    st.markdown(
+        f'<div class="brand-line hud-top">{icon_svg("apartment", 20, "var(--accent)")}'
+        f'<div><b>{APP_NAME}</b><div class="tiny">{configuration.get("boss_name", "Bos")} · '
+        f'hari ke-{summ["day"]} · {chip(str(summ["pending"]), "warn", "hourglass_bottom", 11)} '
+        f'{chip(str(summ["inbox_unread"]), "bad" if summ["inbox_unread"] else "muted", "mark_chat_unread", 11)}</div></div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def bottom_bar() -> None:
-    state = S()
-    cols = st.columns(len(ROOM_ORDER), gap="small", vertical_alignment="center")
-    for col, rid in zip(cols, ROOM_ORDER):
-        room = ROOMS[rid]
-        aktif = st.session_state.get("selected_room") == rid and st.session_state.get("drawer") == "kantor"
+    """Semua tombol fitur ada di bawah: fitur dulu, lalu tombol ruang."""
+    summ = engine.summary(S())
+    fitur = [("fitur", slug, icon_name, judul) for slug, icon_name, judul in TOPBAR]
+    ruang = [("ruang", rid, ROOMS[rid].icon, ROOMS[rid].name) for rid in ROOM_ORDER]
+    semua = fitur + ruang
+    cols = st.columns(len(semua), gap="small", vertical_alignment="center")
+    for i, (col, (jenis, kunci, icon_name, judul)) in enumerate(zip(cols, semua)):
         with col:
-            if rid == ROOM_ORDER[0]:
+            if i == 0:
                 st.markdown('<div class="hud-bottom"></div>', unsafe_allow_html=True)
-            if st.button(
-                " ",
-                key=f"bb_{rid}",
-                icon=mat(room.icon),
-                help=room.name,
-                type="primary" if aktif else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state["selected_room"] = rid
-                open_drawer("kantor")
+            if jenis == "fitur":
+                badge = ""
+                if kunci == "approval" and summ["pending"]:
+                    badge = f" ({summ['pending']})"
+                if kunci == "inbox" and summ["inbox_unread"]:
+                    badge = f" ({summ['inbox_unread']})"
+                aktif = st.session_state.get("drawer") == kunci
+                if st.button(
+                    " ",
+                    key=f"fb_{kunci}",
+                    icon=mat(icon_name),
+                    help=f"{judul}{badge}",
+                    type="primary" if aktif else "secondary",
+                    use_container_width=True,
+                ):
+                    open_drawer(None if aktif else kunci)
+            else:
+                aktif = st.session_state.get("selected_room") == kunci and st.session_state.get("drawer") == "kantor"
+                if st.button(
+                    " ",
+                    key=f"bb_{kunci}",
+                    icon=mat(icon_name),
+                    help=judul,
+                    type="primary" if aktif else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state["selected_room"] = kunci
+                    open_drawer("kantor")
 
 
 def drawer() -> None:
