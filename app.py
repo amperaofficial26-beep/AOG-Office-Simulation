@@ -126,18 +126,7 @@ div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-te
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"],
 div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="column"] {
-  width: 48px !important; min-width: 48px; flex: 0 0 48px !important;
-  display: flex; justify-content: center;
-}
-div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) div[data-testid="stHorizontalBlock"] {
-  align-items: center !important;
-}
-/* kolom pertama memuat penanda .hud-bottom; hilangkan jarak ekstra agar tombolnya sejajar */
-div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"]:first-child [data-testid="stVerticalBlock"] {
-  gap: 0 !important;
-}
-div[data-testid="stMainBlockContainer"] > div > div:has(.hud-bottom) [data-testid="stColumn"]:first-child [data-testid="stElementContainer"]:has(.hud-bottom) {
-  display: none !important;
+  width: auto !important; min-width: 44px; flex: 0 0 auto !important;
 }
 div[data-testid="stMainBlockContainer"] > div > div:has(.drawer-head) {
   position: fixed; top: 54px; right: 8px; bottom: 84px; z-index: 40;
