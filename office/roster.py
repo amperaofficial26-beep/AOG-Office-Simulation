@@ -30,7 +30,7 @@ ROOMS: dict[str, Room] = {
             icon="terminal",
             color="#22D3EE",
             desc="Insinyur menulis, mereview, dan menambal kode repo Anda.",
-            gx=3, gy=0, gw=4, gh=3,
+            gx=5, gy=0, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard", "server"),
         ),
         Room(
@@ -39,7 +39,7 @@ ROOMS: dict[str, Room] = {
             icon="psychology",
             color="#A78BFA",
             desc="Riset pasar, kompetitor, dan ringkasan teknis.",
-            gx=7, gy=0, gw=3, gh=3,
+            gx=10, gy=0, gw=5, gh=5,
             furniture=("desk", "monitor", "bookshelf", "plant"),
         ),
         Room(
@@ -48,7 +48,7 @@ ROOMS: dict[str, Room] = {
             icon="palette",
             color="#F472B6",
             desc="UI, aset visual, dan panduan gaya produk.",
-            gx=10, gy=0, gw=3, gh=3,
+            gx=15, gy=0, gw=5, gh=5,
             furniture=("desk", "monitor", "easel", "plant"),
         ),
         Room(
@@ -57,7 +57,7 @@ ROOMS: dict[str, Room] = {
             icon="campaign",
             color="#FB923C",
             desc="Copywriting, kampanye, dan konten media sosial.",
-            gx=10, gy=3, gw=3, gh=3,
+            gx=20, gy=0, gw=5, gh=5,
             furniture=("desk", "monitor", "sofa", "plant"),
         ),
         Room(
@@ -66,7 +66,7 @@ ROOMS: dict[str, Room] = {
             icon="bug_report",
             color="#F87171",
             desc="Pengujian, pencarian bug, dan laporan kualitas.",
-            gx=0, gy=6, gw=3, gh=3,
+            gx=5, gy=5, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard"),
         ),
         Room(
@@ -75,7 +75,7 @@ ROOMS: dict[str, Room] = {
             icon="storage",
             color="#34D399",
             desc="Analisis metrik, laporan angka, dan dashboard.",
-            gx=3, gy=6, gw=3, gh=3,
+            gx=10, gy=5, gw=5, gh=5,
             furniture=("desk", "monitor", "server", "bookshelf"),
         ),
         Room(
@@ -84,7 +84,7 @@ ROOMS: dict[str, Room] = {
             icon="settings",
             color="#818CF8",
             desc="Deployment, konfigurasi, dan kesehatan layanan.",
-            gx=6, gy=6, gw=3, gh=3,
+            gx=15, gy=5, gw=5, gh=5,
             furniture=("desk", "monitor", "server"),
         ),
         Room(
@@ -93,7 +93,7 @@ ROOMS: dict[str, Room] = {
             icon="local_cafe",
             color="#FBBF24",
             desc="Kopi, camilan, dan game. Tempat karyawan memulihkan energi.",
-            gx=9, gy=6, gw=3, gh=3,
+            gx=20, gy=5, gw=5, gh=5,
             furniture=("sofa", "coffee", "arcade", "plant"),
         ),
         Room(
@@ -102,7 +102,7 @@ ROOMS: dict[str, Room] = {
             icon="supervisor_account",
             color="#FACC15",
             desc="Ruang Anda. Semua persetujuan keluar dari sini.",
-            gx=1, gy=0, gw=2, gh=3,
+            gx=0, gy=0, gw=5, gh=5,
             furniture=("desk", "monitor", "plant", "trophy"),
         ),
         
@@ -113,7 +113,7 @@ ROOMS: dict[str, Room] = {
             icon="description",
             color="#60A5FA",
             desc="Dokumentasi teknis, README, dan panduan penggunaan.",
-            gx=0, gy=9, gw=3, gh=3,
+            gx=0, gy=10, gw=5, gh=5,
             furniture=("desk", "monitor", "bookshelf", "plant"),
         ),
         Room(
@@ -122,7 +122,7 @@ ROOMS: dict[str, Room] = {
             icon="edit_note",
             color="#F9A8D4",
             desc="Artikel, naskah, dan penulisan profesional.",
-            gx=3, gy=9, gw=3, gh=3,
+            gx=5, gy=10, gw=5, gh=5,
             furniture=("desk", "monitor", "bookshelf", "plant"),
         ),
         Room(
@@ -131,7 +131,7 @@ ROOMS: dict[str, Room] = {
             icon="image",
             color="#C4B5FD",
             desc="Pembuatan gambar AI dan pengolahan aset visual.",
-            gx=6, gy=9, gw=3, gh=3,
+            gx=10, gy=10, gw=5, gh=5,
             furniture=("desk", "monitor", "easel", "plant"),
         ),
         Room(
@@ -140,7 +140,7 @@ ROOMS: dict[str, Room] = {
             icon="travel_explore",
             color="#67E8F9",
             desc="Pencarian web, pengumpulan sumber, dan verifikasi informasi.",
-            gx=9, gy=9, gw=3, gh=3,
+            gx=15, gy=10, gw=5, gh=5,
             furniture=("desk", "monitor", "bookshelf", "whiteboard"),
         ),
         Room(
@@ -149,7 +149,7 @@ ROOMS: dict[str, Room] = {
             icon="security",
             color="#FCA5A5",
             desc="Audit keamanan aplikasi dan pemeriksaan kerentanan.",
-            gx=12, gy=9, gw=3, gh=3,
+            gx=20, gy=10, gw=5, gh=5,
             furniture=("desk", "monitor", "server", "whiteboard"),
         ),
 
@@ -160,7 +160,7 @@ ROOMS: dict[str, Room] = {
             icon="database",
             color="#6EE7B7",
             desc="Perancangan skema dan pengelolaan basis data.",
-            gx=0, gy=12, gw=3, gh=3,
+            gx=0, gy=15, gw=5, gh=5,
             furniture=("desk", "monitor", "server", "bookshelf"),
         ),
         Room(
@@ -169,7 +169,7 @@ ROOMS: dict[str, Room] = {
             icon="account_tree",
             color="#93C5FD",
             desc="Workflow, integrasi, dan otomatisasi tugas.",
-            gx=3, gy=12, gw=3, gh=3,
+            gx=5, gy=15, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard", "server"),
         ),
         Room(
@@ -178,7 +178,7 @@ ROOMS: dict[str, Room] = {
             icon="inventory_2",
             color="#FDBA74",
             desc="Perencanaan fitur dan pengembangan produk.",
-            gx=6, gy=12, gw=3, gh=3,
+            gx=10, gy=15, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard", "sofa"),
         ),
         Room(
@@ -187,7 +187,7 @@ ROOMS: dict[str, Room] = {
             icon="insights",
             color="#FDE68A",
             desc="Analisis arah bisnis dan perencanaan proyek.",
-            gx=9, gy=12, gw=3, gh=3,
+            gx=15, gy=15, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard", "plant"),
         ),
         Room(
@@ -196,7 +196,7 @@ ROOMS: dict[str, Room] = {
             icon="groups",
             color="#A5B4FC",
             desc="Koordinasi tim dan pembahasan proyek.",
-            gx=12, gy=12, gw=3, gh=3,
+            gx=20, gy=15, gw=5, gh=5,
             furniture=("sofa", "whiteboard", "plant"),
         ),
 
@@ -207,7 +207,7 @@ ROOMS: dict[str, Room] = {
             icon="local_library",
             color="#D8B4FE",
             desc="Referensi, arsip, dan pengetahuan internal.",
-            gx=0, gy=15, gw=3, gh=3,
+            gx=0, gy=20, gw=5, gh=5,
             furniture=("bookshelf", "desk", "plant"),
         ),
         Room(
@@ -216,7 +216,7 @@ ROOMS: dict[str, Room] = {
             icon="school",
             color="#86EFAC",
             desc="Pembelajaran dan peningkatan kemampuan agen.",
-            gx=3, gy=15, gw=3, gh=3,
+            gx=5, gy=20, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard"),
         ),
         Room(
@@ -225,7 +225,7 @@ ROOMS: dict[str, Room] = {
             icon="monitor_heart",
             color="#7DD3FC",
             desc="Pemantauan status layanan dan aktivitas kantor.",
-            gx=6, gy=15, gw=3, gh=3,
+            gx=10, gy=20, gw=5, gh=5,
             furniture=("desk", "monitor", "server"),
         ),
         Room(
@@ -234,7 +234,7 @@ ROOMS: dict[str, Room] = {
             icon="psychology",
             color="#E9D5FF",
             desc="Merancang, menguji, dan mengoptimalkan prompt AI.",
-            gx=9, gy=15, gw=3, gh=3,
+            gx=15, gy=20, gw=5, gh=5,
             furniture=("desk", "monitor", "whiteboard", "bookshelf"),
         ),
         Room(
@@ -243,7 +243,7 @@ ROOMS: dict[str, Room] = {
             icon="hub",
             color="#99F6E4",
             desc="Menghubungkan model AI, API, dan layanan eksternal.",
-            gx=12, gy=15, gw=3, gh=3,
+            gx=20, gy=20, gw=5, gh=5,
             furniture=("desk", "monitor", "server", "whiteboard"),
         ),
     ]
@@ -281,36 +281,39 @@ ROOM_ORDER = [
 ROOM_LABEL = {rid: ROOMS[rid].name for rid in ROOMS}
 
 # Tempat "parkir" default tiap karyawan di dalam ruangannya (koordinat grid).
-DESK_SPOTS: dict[str, list[tuple[float, float]]] = {
-    "boss": [(1.5, 0.8)],
-    "code": [(3.7, 0.7), (5.4, 0.7), (3.7, 2.0)],
-    "research": [(7.6, 0.7), (8.9, 2.0)],
-    "design": [(10.6, 0.7), (11.9, 2.0)],
-    "marketing": [(10.6, 3.7), (11.9, 5.0)],
-    "reception": [(0.6, 3.7), (1.9, 5.0)],
-    "qa": [(0.6, 6.7), (1.9, 8.0)],
-    "data": [(3.6, 6.7), (4.9, 8.0)],
-    "ops": [(6.6, 6.7), (7.9, 8.0)],
-    "break": [(9.6, 6.8), (10.9, 7.4), (10.2, 8.2)],
-    "documentation": [(0.6, 9.7), (1.9, 11.0)],
-    "writing": [(3.6, 9.7), (4.9, 11.0)],
-    "ai_image": [(6.6, 9.7), (7.9, 11.0)],
-    "web_research": [(9.6, 9.7), (10.9, 11.0)],
-    "cybersecurity": [(12.6, 9.7), (13.9, 11.0)],
-    "database": [(0.6, 12.7), (1.9, 14.0)],
-    "automation": [(3.6, 12.7), (4.9, 14.0)],
-    "product": [(6.6, 12.7), (7.9, 14.0)],
-    "strategy": [(9.6, 12.7), (10.9, 14.0)],
-    "meeting": [(12.6, 12.7), (13.9, 14.0)],
-    "library": [(0.6, 15.7), (1.9, 17.0)],
-    "training": [(3.6, 15.7), (4.9, 17.0)],
-    "monitoring": [(6.6, 15.7), (7.9, 17.0)],
-    "prompt_engineering": [(9.6, 15.7), (10.9, 17.0)],
-    "ai_integration": [(12.6, 15.7), (13.9, 17.0)],
-}
 
-BREAK_SPOTS = [(9.6, 6.8), (10.9, 7.4), (10.2, 8.2), (9.8, 8.4)]
-BOSS_SPOT = (1.5, 0.8)
+DESK_SPOTS: dict[str, list[tuple[float, float]]] = {
+    "boss": [(1.0, 1.0), (2.8, 2.5)],
+    "code": [(6.0, 1.0), (8.0, 1.0), (6.0, 3.0), (8.0, 3.0)],
+    "research": [(11.0, 1.0), (13.0, 2.5), (11.0, 3.5)],
+    "design": [(16.0, 1.0), (18.0, 2.5), (16.0, 3.5)],
+    "marketing": [(21.0, 1.0), (23.0, 2.5), (21.0, 3.5)],
+    "reception": [(1.0, 6.0), (3.0, 7.5)],
+    "qa": [(6.0, 6.0), (8.0, 7.5), (6.0, 8.5)],
+    "data": [(11.0, 6.0), (13.0, 7.5), (11.0, 8.5)],
+    "ops": [(16.0, 6.0), (18.0, 7.5), (16.0, 8.5)],
+    "break": [(21.0, 6.0), (23.0, 7.0), (21.5, 8.5), (23.5, 8.5)],
+    "documentation": [(1.0, 11.0), (3.0, 12.5)],
+    "writing": [(6.0, 11.0), (8.0, 12.5)],
+    "ai_image": [(11.0, 11.0), (13.0, 12.5)],
+    "web_research": [(16.0, 11.0), (18.0, 12.5)],
+    "cybersecurity": [(21.0, 11.0), (23.0, 12.5)],
+    "database": [(1.0, 16.0), (3.0, 17.5)],
+    "automation": [(6.0, 16.0), (8.0, 17.5)],
+    "product": [(11.0, 16.0), (13.0, 17.5)],
+    "strategy": [(16.0, 16.0), (18.0, 17.5)],
+    "meeting": [(21.0, 16.0), (23.0, 17.5)],
+    "library": [(1.0, 21.0), (3.0, 22.5)],
+    "training": [(6.0, 21.0), (8.0, 22.5)],
+    "monitoring": [(11.0, 21.0), (13.0, 22.5)],
+    "prompt_engineering": [(16.0, 21.0), (18.0, 22.5)],
+    "ai_integration": [(21.0, 21.0), (23.0, 22.5)],
+}
+BREAK_SPOTS = [
+    (21.0, 6.0), (23.0, 7.0),
+    (21.5, 8.5), (23.5, 8.5),
+]
+BOSS_SPOT = (1.0, 1.0)
 
 
 def desk_spot(room_id: str, index: int = 0) -> tuple[float, float]:
