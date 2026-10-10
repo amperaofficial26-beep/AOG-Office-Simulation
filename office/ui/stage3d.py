@@ -188,7 +188,7 @@ def build_payload(
                 "gh": int(_get(r, "gh", 3)),
                 "furniture": list(_get(r, "furniture", ()) or ()),
                 "spots": [list(map(float, s)) for s in desk_spots.get(rid, [])],
-                "lounge": rid == "break",
+                "lounge": rid in ("break", "atrium"),
                 "badge": int((badges or {}).get(rid, 0)),
             }
         )
@@ -696,7 +696,11 @@ rooms.forEach(furnish);
 
 /* ---------- lobi: logo AOG perak ---------- */
 (function lobby(){
-  var cx=GW/2,cz=GH/2;
+  var atrium = rooms.find(function(r) {
+    return r.rid === "atrium";
+  });
+  var cx = atrium ? atrium.gx + atrium.gw / 2 : GW / 2;
+  var cz = atrium ? atrium.gy + atrium.gh / 2 : GH / 2;
   var c=document.createElement("canvas");c.width=c.height=512;var x=c.getContext("2d");
   var gr=x.createRadialGradient(200,190,20,256,256,250);
   gr.addColorStop(0,"#FAFBFC");gr.addColorStop(0.6,"#B9C1CA");gr.addColorStop(1,"#8E98A4");
