@@ -53,14 +53,22 @@ def test_css_hud_dimuat(app):
     assert "rotate(90deg)" in style[0], "aturan rotasi landscape untuk ponsel tidak ada"
 
 
-def test_bar_bawah_memuat_semua_fitur(app):
-    for slug in TOPBAR_SLUGS:
-        assert any(b.key == f"fb_{slug}" for b in app.button), f"fb_{slug} hilang"
-
-
 def test_bar_bawah_memuat_semua_ruang(app):
     for slug in ROOM_SLUGS:
         assert any(b.key == f"bb_{slug}" for b in app.button), f"bb_{slug} hilang"
+
+
+def test_ruang_dibuka_dari_bar_bawah(app):
+    tombol = next(b for b in app.button if b.key == "bb_code")
+    tombol.click().run()
+    assert not app.exception
+    mds = " ".join(md.value for md in app.markdown)
+    assert "Ruang Kode" in mds
+
+
+def test_bar_bawah_memuat_semua_fitur(app):
+    for slug in TOPBAR_SLUGS:
+        assert any(b.key == f"fb_{slug}" for b in app.button), f"fb_{slug} hilang"
 
 
 @pytest.mark.parametrize("slug", TOPBAR_SLUGS)
@@ -74,14 +82,6 @@ def test_drawer_bisa_ditutup(app):
     close = next(b for b in app.button if b.key == "drawer_close")
     close.click().run()
     assert not app.exception
-
-
-def test_ruang_dibuka_dari_bar_bawah(app):
-    tombol = next(b for b in app.button if b.key == "bb_code")
-    tombol.click().run()
-    assert not app.exception
-    mds = " ".join(md.value for md in app.markdown)
-    assert "Ruang Kode" in mds
 
 
 def test_tidak_ada_emoji_di_antarmuka(app):
